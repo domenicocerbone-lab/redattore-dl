@@ -1,0 +1,12 @@
+# Cosa non caricare con `railway up` (vale anche fuori da un repository git)
+node_modules
+dist
+data
+data-demo
+data-prova
+.env
+*.mp4
+*.zip
+*.tmp
+# Dati reali di un cantiere cliente: si caricano dall'app
+esempi/nowvision/

@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+data-demo
+.env
+*.mp4
+*.zip
+# Dati reali di un cantiere cliente: si caricano dall'app, non finiscono nell'immagine
+esempi/nowvision/

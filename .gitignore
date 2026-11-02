@@ -1,0 +1,12 @@
+node_modules
+dist
+data
+.env
+*.tmp
+data-demo
+# Dati reali di un cantiere cliente (Residenze Incanto): non pubblicarli
+esempi/nowvision/
+data-prova
+# Video e archivi della demo: restano fuori dal repository
+*.mp4
+*.zip

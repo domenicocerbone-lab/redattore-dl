@@ -1,0 +1,309 @@
+/* Token NowVision e stili di base. I valori ricalcano il design «Redattore DL — UI chat». */
+
+@font-face {
+  font-family: "Uncut Sans";
+  src: url("../assets/fonts/uncut-sans-300.woff2") format("woff2");
+  font-weight: 300;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Uncut Sans";
+  src: url("../assets/fonts/uncut-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Uncut Sans";
+  src: url("../assets/fonts/uncut-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Uncut Sans";
+  src: url("../assets/fonts/uncut-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+
+:root {
+  --nv-ink: #0c0a08;
+  --nv-ink-soft: #333333;
+  --nv-paper: #f9f9f9;
+  --nv-white: #ffffff;
+  --nv-sand: #f4f2f0;
+  --nv-sidewalk: #dbdbdb;
+  --nv-mint: #00f1a7;
+  --nv-mint-dark: #00bc7d;
+  --nv-mint-ink: #009a66;
+  --nv-mint-soft: #c9f8eb;
+  --nv-orange: #ff8569;
+  --nv-orange-ink: #b4462d;
+  --nv-orange-soft: #ffe7df;
+  --nv-orange-tint: #fff3ef;
+  --nv-orange-line: rgba(255, 133, 105, 0.6);
+  --nv-placeholder: #fde047;
+  --nv-peri-soft: #e8e6ff;
+  --nv-peri-ink: #5858c5;
+  --nv-glass: rgba(255, 255, 255, 0.85);
+  --nv-line-faint: rgba(12, 10, 8, 0.08);
+  --nv-line: rgba(12, 10, 8, 0.1);
+  --nv-line-strong: rgba(12, 10, 8, 0.12);
+  --nv-line-firm: rgba(12, 10, 8, 0.15);
+  --nv-stripe-a: #e9e7e4;
+  --nv-stripe-b: #f0eeeb;
+
+  /* Colore d'accento: è la leva «accent» del design (#00F1A7, #00BC7D o #8D84FF). */
+  --nv-accent: var(--nv-mint);
+
+  --nv-font-sans: "Uncut Sans", system-ui, sans-serif;
+  --nv-font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --nv-r-xs: 2px;
+  --nv-r-sm: 4px;
+  --nv-r-md: 6px;
+  --nv-r-lg: 8px;
+  --nv-r-xl: 12px;
+  --nv-shadow-composer: 0 8px 24px rgba(12, 10, 8, 0.06);
+  --nv-shadow-menu: 0 12px 32px -8px rgba(12, 10, 8, 0.18);
+  --nv-dur: 160ms;
+  --nv-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--nv-paper);
+  color: var(--nv-ink);
+  font-family: var(--nv-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--nv-ink);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--nv-mint-ink);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--nv-mint-dark);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Primitive condivise */
+
+.etichetta-mono {
+  font-family: var(--nv-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-ink-soft);
+}
+
+.pillola {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--nv-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-mint-soft);
+  color: var(--nv-ink);
+  white-space: nowrap;
+}
+.pillola--attenzione {
+  background: var(--nv-orange-soft);
+  color: var(--nv-orange-ink);
+}
+.pillola--bordo {
+  background: transparent;
+  border: 1px solid var(--nv-orange-ink);
+  color: var(--nv-orange-ink);
+}
+.pillola--neutra {
+  background: transparent;
+  border: 1px solid var(--nv-line-firm);
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: var(--nv-r-sm);
+  border: 1px solid var(--nv-ink);
+  background: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--nv-ink);
+  white-space: nowrap;
+  transition: background var(--nv-dur) var(--nv-ease), border-color var(--nv-dur) var(--nv-ease);
+}
+.btn:hover:not(:disabled) {
+  background: rgba(12, 10, 8, 0.04);
+  color: var(--nv-ink);
+}
+.btn--primario {
+  background: var(--nv-accent);
+  border-color: var(--nv-accent);
+}
+.btn--primario:hover:not(:disabled) {
+  background: var(--nv-accent);
+  filter: brightness(0.95);
+}
+.btn--suggerimento {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--nv-r-md);
+  border-color: var(--nv-line-strong);
+  background: var(--nv-glass);
+  font-size: 14px;
+  font-weight: 400;
+}
+.btn--piccolo {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 400;
+  border-color: var(--nv-line-firm);
+  background: var(--nv-white);
+}
+.btn--piccolo.btn--primario {
+  font-weight: 500;
+  padding: 0 14px;
+  background: var(--nv-accent);
+  border-color: var(--nv-accent);
+}
+.btn:disabled {
+  opacity: 0.45;
+}
+
+.btn-icona {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--nv-r-sm);
+  background: transparent;
+  color: var(--nv-ink-soft);
+  transition: background var(--nv-dur) var(--nv-ease);
+}
+.btn-icona:hover:not(:disabled) {
+  background: rgba(12, 10, 8, 0.05);
+}
+.btn-icona--bordo {
+  border: 1px solid var(--nv-line-strong);
+  background: var(--nv-white);
+  color: var(--nv-ink);
+}
+.btn-icona--accento {
+  background: var(--nv-accent);
+  color: var(--nv-ink);
+}
+.btn-icona--accento:hover:not(:disabled) {
+  background: var(--nv-accent);
+  filter: brightness(0.95);
+}
+.btn-icona--spento {
+  background: var(--nv-sidewalk);
+  color: var(--nv-ink-soft);
+}
+.btn-icona--spento:hover:not(:disabled) {
+  background: var(--nv-sidewalk);
+}
+
+.scheda {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-glass);
+  overflow: hidden;
+}
+
+.segnaposto {
+  background: var(--nv-placeholder);
+  padding: 0 4px;
+  border-radius: var(--nv-r-xs);
+}
+
+.barra-progresso {
+  height: 2px;
+  background: var(--nv-line-faint);
+}
+.barra-progresso > span {
+  display: block;
+  height: 2px;
+  background: var(--nv-mint-dark);
+  transition: width 300ms var(--nv-ease);
+}
+
+.foto-segnaposto {
+  background: repeating-linear-gradient(135deg, var(--nv-stripe-a) 0 10px, var(--nv-stripe-b) 10px 20px);
+}
+
+@keyframes pulsa {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

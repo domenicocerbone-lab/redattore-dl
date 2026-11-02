@@ -1,0 +1,99 @@
+# Redattore DL
+
+Chat per il Direttore dei Lavori: racconti la giornata (scrivendo, dettando o mandando foto) e il Redattore prepara la bozza del documento di cantiere — giornale dei lavori, libretto delle misure, SAL, verbale di sopralluogo, ordine di servizio, rapporto di non conformità e altri. La bozza si apre nel pannello laterale, si corregge in chat o a mano, e si esporta. Verifica e firma restano del DL.
+
+L'interfaccia implementa il design «Redattore DL — UI chat» (NowVision Design System): home, chat con raccolta dati, bozza nel pannello laterale, bozze dalle foto, layout mobile e i tre esempi di documento.
+
+## Avvio
+
+Serve Node.js 22 o successivo.
+
+```bash
+npm install
+cp .env.example .env   # poi inserisci ANTHROPIC_API_KEY
+npm run dev            # http://localhost:5173
+```
+
+Senza chiave API puoi provare tutta l'interfaccia con risposte di esempio prese dal design (nessun costo, nessuna chiamata esterna):
+
+```bash
+npm run demo
+```
+
+In produzione: `npm run build` e poi `npm start` (serve `REDATTORE_PASSWORD_ADMIN`, vedi sotto).
+
+## Online: accessi e utilizzo
+
+In sviluppo e in demo l'accesso è libero. Con `REDATTORE_PASSWORD_ADMIN` impostata (obbligatoria con `npm start`) si entra solo così:
+
+- **Amministratore**: dalla schermata di accesso, «Sei l'amministratore?», con la password. Dal menu col proprio nome, in basso a sinistra, apre **Utilizzo e accessi**.
+- **Persone invitate**: l'amministratore le aggiunge in Utilizzo e accessi (nome, studio, ruolo, cantieri che possono vedere, messaggi al giorno) e riceve un **link personale** da mandare. Chi lo apre entra con il suo nome, senza password. Il link si vede solo alla creazione: se si perde se ne crea uno nuovo e quello vecchio smette di funzionare. «Revoca l'accesso» chiude subito le sessioni aperte.
+- Ognuno vede solo le proprie conversazioni e i cantieri assegnati; l'amministratore può aprire tutte le conversazioni dall'attività recente.
+
+La pagina **Utilizzo e accessi** mostra per 7, 30 o 90 giorni: persone attive, report iniziati, messaggi, riprese 360° inviate, bozze generate, esportazioni e costo API stimato (dai token di ogni risposta ai prezzi di listino), i messaggi per giorno, una riga per persona con ultima attività e limite del giorno, e l'attività recente. «CSV» scarica tutto il registro.
+
+Il registro è in `<REDATTORE_DATI>/eventi.jsonl`, persone e sessioni in `persone.json` e `sessioni.json` (codici e sessioni salvati solo come hash).
+
+## Pubblicazione su Railway
+
+Il progetto ha già `Dockerfile` e `railway.json`. Dalla cartella del progetto, sul tuo computer (serve Node.js):
+
+```bash
+npx @railway/cli login
+npx @railway/cli init --name redattore-dl
+npx @railway/cli add --service redattore-dl
+npx @railway/cli volume add --service redattore-dl --mount-path /data
+```
+
+Poi, nel pannello di Railway (`npx @railway/cli open`), servizio **redattore-dl** → **Variables**, aggiungi `ANTHROPIC_API_KEY` e `REDATTORE_PASSWORD_ADMIN` (una password lunga, solo tua). Infine:
+
+```bash
+npx @railway/cli up --service redattore-dl --detach
+npx @railway/cli domain --service redattore-dl
+```
+
+L'ultimo comando stampa l'indirizzo pubblico (`https://….up.railway.app`). Per gli aggiornamenti basta ripetere `up`.
+
+I file in `.railwayignore` non vengono caricati (la chiave in `.env`, `node_modules`, i dati locali): i dati di esempio di Residenze Incanto (`esempi/nowvision/`) restano sul tuo computer. Online carichi computo, cronoprogramma e riprese dall'app («Dalle riprese 360°» → «Sostituisci» e «Aggiungi riprese»).
+
+## Come funziona
+
+- **Server** (`server/`): Express. Ogni messaggio del DL apre un turno in streaming (SSE) verso l'API Claude con l'SDK ufficiale `@anthropic-ai/sdk`.
+- **Modello**: `claude-opus-5-5` con thinking adattivo e `effort: high` (modificabili con `REDATTORE_MODELLO` e `REDATTORE_SFORZO`).
+- **Risposte strutturate**: il modello risponde con un JSON vincolato dallo schema in `shared/schema.ts` — un elenco di «parti» (testo, dati raccolti, foto osservate, proposte di bozza, controlli, decisioni, righe di misura, documento, pulsanti). Il server lo legge mentre arriva, così le schede e la bozza compaiono in tempo reale.
+- **Calcoli**: il modello non fa conti a mente. Misure e importi del SAL passano dagli strumenti `calcola_misure` e `calcola_sal` (`shared/numeri.ts`), arrotondati al centesimo.
+- **Fallback sui rifiuti**: le richieste attivano il fallback lato server (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`): se i classificatori di sicurezza bloccano per errore una richiesta legittima, l'API la ripete su un altro modello invece di restituire un rifiuto.
+- **Cronologia**: le conversazioni sono salvate in `data/` (JSON e foto). La cronologia inviata all'API cresce solo in coda, così i blocchi di ragionamento restano validi e il prefisso resta in cache (`cache_control` automatico).
+- **Foto**: ridimensionate nel browser (lato lungo 2000 px), numerate F1, F2… nella conversazione.
+- **Dettatura**: Web Speech API del browser (Chrome, Edge, Safari).
+- **Esportazione**: PDF tramite stampa del foglio, Word come `.doc` HTML, tabelle del SAL in CSV per Excel.
+
+## Riprese 360° e dati NowVision
+
+Per ogni cantiere il Redattore può leggere i dati della piattaforma NowVision e usarli nel confronto:
+
+- **Cronoprogramma**: l'xlsx «Construction Schedule» (zone, WBS, date previste ed effettive, % avanzamento, note; anche il foglio di note).
+- **Computo**: l'export «WBS Mode» (con «Misurato dall'IA», costo rilevato e affidabilità) oppure il template di import «BOQ Template».
+- **Riprese 360°**: immagini con zona e data.
+
+Si caricano dalla finestra «Riprese 360°» (chip «Proponi dalle riprese NowVision» in home, o il pulsante 360° nel campo di scrittura). I file finiscono in `data/nowvision/<cantiere>/`. Quando il DL allega le riprese, il server manda al modello un riepilogo calcolato: avanzamento atteso alla data della ripresa più recente, stato registrato, voci di computo con il misurato dall'IA. Il modello risponde con la scheda «Confronto con il programma lavori» e propone le bozze. Un'attività che non si vede nelle riprese viene segnalata come «non visibile» e chiesta al DL, mai trattata come ritardo.
+
+`esempi/nowvision/residenze-incanto/` contiene i dati reali di Residenze Incanto (cronoprogramma, computo e 5 riprese del 19 e 23 ottobre 2026), copiati in `data/` al primo avvio. Sono dati di un cliente: la cartella è esclusa da git, non pubblicarla.
+
+## Struttura
+
+```
+server/       API, turno con Claude, prompt di sistema, strumenti di calcolo, archivio, dati NowVision, accessi e registro d'uso
+shared/       schema delle risposte, catalogo dei documenti, cantieri di esempio, calcoli
+src/          interfaccia React (Vite)
+  components/ barra laterale, home, chat, schede, campo di scrittura, pannello documento
+  lib/        stato condiviso, chiamate al server, dettatura, foto, esportazioni
+scripts/      Claude finto per demo e prove dell'interfaccia
+```
+
+## Da sapere
+
+- L'anagrafica dei cantieri e dell'utente (`shared/cantieri.ts`) è di esempio: in produzione va letta dalla piattaforma NowVision.
+- Non c'è autenticazione né multiutente: è pensato per girare in locale o dietro l'accesso della piattaforma.
+- In modalità demo il confronto con le riprese NowVision c'è solo per le 5 riprese di esempio di Residenze Incanto, con il report di avanzamento: sono risposte preparate in anticipo sulle riprese e sui file reali. Per qualsiasi altra ripresa serve Claude vero.
+- `npm run demo` usa un server finto (`scripts/claude-finto.ts`) che riconosce solo i casi del design: serve a vedere l'interfaccia, non a valutare il Redattore.

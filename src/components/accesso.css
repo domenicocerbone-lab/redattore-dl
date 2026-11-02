@@ -1,0 +1,78 @@
+.accesso {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 16px;
+  background: var(--nv-paper);
+}
+.accesso__scheda {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 28px;
+  background: var(--nv-white);
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-xl);
+}
+.accesso__titolo {
+  margin: 8px 0 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.accesso__testo,
+.accesso__motivo {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--nv-ink-soft);
+}
+.accesso__motivo {
+  padding: 10px 12px;
+  color: var(--nv-orange-ink);
+  background: var(--nv-orange-tint);
+  border: 1px solid var(--nv-orange-line);
+  border-radius: var(--nv-r-md);
+}
+.accesso__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.accesso__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.accesso__campo input {
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-white);
+}
+.accesso__campo input:focus-visible {
+  outline: 2px solid var(--nv-mint-dark);
+  outline-offset: 1px;
+}
+.accesso__errore {
+  margin: 0;
+  font-size: 14px;
+  color: var(--nv-orange-ink);
+}
+.accesso__link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  color: var(--nv-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

@@ -1,0 +1,346 @@
+/* Impaginazione: barra laterale, viste, intestazioni, home e conversazione. */
+
+.app {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.app__contenuto {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.avviso {
+  padding: 10px 24px;
+  background: var(--nv-orange-tint);
+  border-bottom: 1px solid var(--nv-orange-line);
+  font-size: 14px;
+}
+.avviso code {
+  font-family: var(--nv-font-mono);
+  font-size: 12.5px;
+}
+
+.vista {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.vista__vuota {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+}
+
+/* Intestazioni */
+.testata {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 24px;
+}
+.testata--bordo {
+  border-bottom: 1px solid var(--nv-line-faint);
+}
+.testata__sinistra {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.testata__prodotto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: var(--nv-r-md);
+}
+.testata__prodotto:hover {
+  background: rgba(12, 10, 8, 0.04);
+}
+.testata__contesto {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.testata__titolo {
+  font-size: 16px;
+  font-weight: 500;
+}
+.testata__destra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.testata__menu,
+.testata__nuovo {
+  display: none;
+}
+
+.scelta-cantiere {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  padding: 7px 12px;
+  background: var(--nv-white);
+  font-size: 14px;
+}
+.scelta-cantiere__nome {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn--condividi {
+  height: 36px;
+  padding: 0 14px;
+  font-size: 14px;
+}
+
+/* Home */
+.vista--home {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.home {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px 24px 48px;
+}
+.home__intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+.home__intro h1 {
+  margin: 0;
+  font-size: 44px;
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.home__intro p {
+  margin: 0;
+  color: var(--nv-ink-soft);
+  font-size: 16px;
+}
+.pillola-vetro {
+  font-family: var(--nv-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-glass);
+  border: 1px solid var(--nv-line);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 780px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  padding: 8px 12px;
+  background: var(--nv-glass);
+  font-size: 14px;
+  color: var(--nv-ink);
+  transition: border-color var(--nv-dur) var(--nv-ease), background var(--nv-dur) var(--nv-ease);
+}
+.chip:hover {
+  border-color: var(--nv-line-firm);
+  background: var(--nv-white);
+}
+.chip--scelto,
+.chip--scelto:hover {
+  border-color: var(--nv-ink);
+  background: var(--nv-white);
+}
+.chip--menta,
+.chip--menta:hover {
+  border-color: var(--nv-mint-dark);
+  background: var(--nv-mint-soft);
+  font-weight: 500;
+}
+.chip--menta.chip--scelto {
+  box-shadow: inset 0 0 0 1px var(--nv-mint-dark);
+}
+.chip--trasparente,
+.chip--trasparente:hover {
+  background: transparent;
+  color: var(--nv-ink-soft);
+}
+
+.avvertenza {
+  margin: 0;
+  padding: 0 24px 18px;
+  text-align: center;
+  font-family: var(--nv-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nv-ink-soft);
+}
+.avvertenza--fondo {
+  padding: 10px 0 0;
+}
+
+/* Conversazione */
+.vista-conv {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+.conversazione {
+  flex: 1 1 400px;
+  height: 100vh;
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+}
+.app__contenuto:has(.avviso) .conversazione,
+.app__contenuto:has(.avviso) .pannello-doc {
+  height: calc(100dvh - 42px);
+}
+.conversazione__scorrimento {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.conversazione__messaggi {
+  max-width: 808px;
+  margin: 0 auto;
+  padding: 32px 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.conversazione__messaggi--larga {
+  max-width: 868px;
+}
+.conversazione__fondo {
+  width: 100%;
+  max-width: 808px;
+  margin: 0 auto;
+  padding: 8px 24px 16px;
+}
+.conversazione__fondo--larga {
+  max-width: 868px;
+}
+
+.conversazione--affiancata .conversazione__messaggi {
+  max-width: none;
+  padding: 28px 24px 12px;
+  gap: 28px;
+}
+.conversazione--affiancata .conversazione__fondo {
+  max-width: none;
+}
+.conversazione--affiancata .avvertenza--fondo {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .conversazione--affiancata .conversazione__messaggi {
+    max-width: 808px;
+  }
+}
+
+/* Telefono: intestazione a tre zone come nella tavola «Mobile». */
+@media (max-width: 720px) {
+  .testata {
+    padding: 14px 12px 10px;
+    flex-wrap: nowrap;
+  }
+  .testata__menu,
+  .testata__nuovo {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    color: var(--nv-ink);
+  }
+  .testata__destra {
+    display: none;
+  }
+  .testata__contesto {
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    align-items: center;
+    text-align: center;
+  }
+  .testata__contesto .pillola {
+    font-size: 10.5px;
+    padding: 2px 7px;
+  }
+  .testata__titolo {
+    font-size: 14px;
+  }
+  .vista--home .testata {
+    flex-wrap: wrap;
+  }
+  .vista--home .testata__sinistra {
+    width: 100%;
+  }
+  .vista--home .menu:has(.scelta-cantiere) {
+    width: 100%;
+  }
+  .scelta-cantiere {
+    width: 100%;
+  }
+  .home {
+    justify-content: flex-start;
+    gap: 22px;
+    padding: 24px 16px 32px;
+  }
+  .home__intro h1 {
+    font-size: 32px;
+  }
+  .home__intro p {
+    font-size: 15px;
+  }
+  .conversazione__messaggi {
+    padding: 18px 16px 8px;
+    gap: 20px;
+  }
+  .conversazione__fondo {
+    padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+  }
+  .conversazione .avvertenza--fondo {
+    display: none;
+  }
+}

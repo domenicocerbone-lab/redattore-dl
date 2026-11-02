@@ -1,0 +1,36 @@
+{
+  "name": "redattore-dl",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false --ignore \"src/**\" --ignore \"data/**\" server/index.ts",
+    "build": "tsc && vite build",
+    "start": "tsx server/index.ts --produzione",
+    "typecheck": "tsc",
+    "demo": "tsx scripts/demo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "express": "^4.22.3",
+    "partial-json": "^0.1.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "read-excel-file": "^9.3.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.25",
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
+  },
+  "private": true,
+  "type": "module",
+  "description": "Redattore DL: bozze dei documenti di direzione lavori dalla chat, con Claude",
+  "engines": {
+    "node": ">=22"
+  }
+}

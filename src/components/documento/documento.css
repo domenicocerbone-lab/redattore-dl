@@ -1,0 +1,255 @@
+/* Il foglio del documento, come nelle tavole «Bozza», «Sopralluogo», «SAL» e «NC». */
+
+.doc {
+  width: 100%;
+  margin: 0 auto;
+  background: var(--nv-white);
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-lg);
+  padding: 40px 44px 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--nv-ink);
+  overflow-wrap: break-word;
+}
+
+.doc[contenteditable="true"] {
+  outline: 2px solid var(--nv-accent);
+  outline-offset: 4px;
+  cursor: text;
+}
+
+.doc-etichetta {
+  font-family: var(--nv-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-ink-soft);
+}
+
+.doc-intestazione {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-family: var(--nv-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nv-ink-soft);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--nv-line);
+}
+
+.doc-titolo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.doc-titolo__testo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.doc-titolo h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+}
+.doc-sottotitolo {
+  color: var(--nv-ink-soft);
+}
+.doc-stati {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.doc-griglia {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  overflow: hidden;
+}
+.doc-griglia--tratteggiata {
+  border: 1px dashed rgba(12, 10, 8, 0.3);
+}
+.doc-griglia__interno {
+  display: grid;
+  margin: 0 -1px -1px 0;
+}
+.doc-griglia__cella {
+  padding: 9px 14px;
+  border-right: 1px solid var(--nv-line-faint);
+  border-bottom: 1px solid var(--nv-line-faint);
+  line-height: 1.55;
+}
+.doc-griglia--tratteggiata .doc-griglia__cella {
+  border-color: transparent;
+}
+
+.doc-sezione {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-sezione h3 {
+  margin: 0;
+  font-family: var(--nv-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.doc-paragrafo {
+  margin: 0;
+}
+.doc-elenco {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.doc-tabella {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  overflow-x: auto;
+}
+.doc-tabella table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.doc-tabella--fitta table {
+  font-size: 13px;
+}
+.doc-tabella th {
+  background: var(--nv-sand);
+  font-family: var(--nv-font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+.doc-tabella td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--nv-line-faint);
+  vertical-align: top;
+}
+.doc-tabella tbody tr:first-child td {
+  border-top: 0;
+}
+.doc-tabella thead + tbody tr:first-child td {
+  border-top: 1px solid var(--nv-line-faint);
+}
+.doc-tabella--fitta th,
+.doc-tabella--fitta td {
+  padding: 7px 8px;
+}
+.doc-tabella .a-destra {
+  text-align: right;
+}
+.doc-tabella td.a-destra {
+  white-space: nowrap;
+}
+.doc-tabella .codice {
+  font-family: var(--nv-font-mono);
+}
+.doc-tabella__totale td {
+  font-weight: 500;
+  border-top: 1px solid var(--nv-line-firm) !important;
+}
+.doc-fuori-norma {
+  color: var(--nv-orange-ink);
+}
+
+.doc-riepilogo-blocco {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.doc-riepilogo {
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.doc-riepilogo__riga {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--nv-line-faint);
+}
+.doc-riepilogo__riga:first-child {
+  border-top: 0;
+}
+.doc-riepilogo__riga > span:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+.doc-riepilogo__riga--totale {
+  font-weight: 500;
+}
+.doc-riepilogo__riga--attenzione {
+  background: var(--nv-orange-tint);
+}
+.doc-riepilogo__riga--finale {
+  padding: 10px 12px;
+  border-top: 1px solid var(--nv-line-firm);
+  background: var(--nv-mint-soft);
+  font-weight: 500;
+  font-size: 15px;
+}
+.doc-nota {
+  font-size: 12.5px;
+  color: var(--nv-ink-soft);
+}
+
+.doc-chiusura {
+  margin: 0;
+  font-style: italic;
+}
+
+.doc-firme {
+  display: grid;
+  gap: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--nv-line);
+}
+.doc-firma {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 26px;
+}
+.doc-firma__nome {
+  border-bottom: 1px solid var(--nv-ink);
+  padding-bottom: 4px;
+}
+
+@media (max-width: 720px) {
+  .doc {
+    padding: 24px 20px 28px;
+  }
+  .doc-titolo h2 {
+    font-size: 24px;
+  }
+  .doc-griglia__interno {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .doc-griglia__cella {
+    grid-column: auto !important;
+  }
+  .doc-firme {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

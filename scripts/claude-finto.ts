@@ -32,6 +32,10 @@ async function streamTesto(res: ServerResponse, indice: number, testo: string) {
   sse(res, { type: "content_block_stop", index: indice });
 }
 
+/** Con FINTO_RIFIUTA_SCHEMA=1 si comporta come l'API quando la grammatica è troppo grande. */
+const RIFIUTA_SCHEMA = Boolean(process.env.FINTO_RIFIUTA_SCHEMA);
+let jsonInRecinto = false;
+
 async function rispondi(
   res: ServerResponse,
   contenuto: { json?: unknown; strumento?: { nome: string; input: unknown } },
@@ -71,7 +75,9 @@ async function rispondi(
     sse(res, { type: "content_block_stop", index: 1 });
     stop = "tool_use";
   } else {
-    await streamTesto(res, 1, JSON.stringify(contenuto.json));
+    const json = JSON.stringify(contenuto.json);
+    // Senza output strutturato il modello vero può avvolgere il JSON in un blocco di codice.
+    await streamTesto(res, 1, jsonInRecinto ? `Ecco la risposta.\n\`\`\`json\n${json}\n\`\`\`` : json);
   }
   sse(res, { type: "message_delta", delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: 900 } });
   sse(res, { type: "message_stop" });
@@ -851,7 +857,21 @@ createServer((req, res) => {
   let corpo = "";
   req.on("data", (c) => (corpo += c));
   req.on("end", () => {
-    const richiesta = JSON.parse(corpo) as { messages: Messaggio[] };
+    const richiesta = JSON.parse(corpo) as { messages: Messaggio[]; output_config?: { format?: unknown } };
+    if (RIFIUTA_SCHEMA && richiesta.output_config?.format) {
+      res.writeHead(400, { "Content-Type": "application/json" }).end(
+        JSON.stringify({
+          type: "error",
+          error: {
+            type: "invalid_request_error",
+            message:
+              "The compiled grammar is too large, which would cause performance issues. Simplify your tool schemas or reduce the number of strict tools.",
+          },
+        }),
+      );
+      return;
+    }
+    jsonInRecinto = RIFIUTA_SCHEMA && !richiesta.output_config?.format;
     const messaggi = richiesta.messages;
     const ultimo = messaggi.at(-1)!;
     const blocchi = typeof ultimo.content === "string" ? [] : ultimo.content;

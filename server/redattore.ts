@@ -6,7 +6,6 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
-import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type {
   BetaContentBlock,
   BetaContentBlockParam,
@@ -27,6 +26,7 @@ import {
 } from "../shared/schema";
 import { dataItaliana } from "../shared/nowvision";
 import { leggiFoto, urlFoto, type ConversazioneSalvata } from "./archivio";
+import { FORMATO_RISPOSTA, ISTRUZIONI_FORMATO } from "./formato";
 import { contestoMessaggio } from "./istruzioni";
 import { contestoPerIlModello, datiNowVision, fileRipresa, urlRipresa } from "./nowvision";
 import { DEFINIZIONI_STRUMENTI, eseguiStrumento } from "./strumenti";
@@ -37,8 +37,10 @@ const SFORZO = (process.env.REDATTORE_SFORZO ?? "high") as "low" | "medium" | "h
 const MAX_GIRI = 6;
 const MAX_TENTATIVI_JSON = 2;
 
-// Lo schema è grande: costruito una volta, la sua grammatica resta in cache lato API.
-const { parse: _scarta, ...FORMATO_RISPOSTA } = betaZodOutputFormat(RispostaSchema);
+// Con l'output strutturato l'API garantisce il JSON. Se rifiuta lo schema (grammatica
+// troppo grande), il server passa al formato chiesto nel prompt e controllato con zod,
+// e ci resta fino al riavvio. REDATTORE_FORMATO=prompt lo impone da subito.
+let formatoStrutturato = process.env.REDATTORE_FORMATO !== "prompt";
 
 let client: Anthropic | null = null;
 function anthropic(): Anthropic {
@@ -168,7 +170,14 @@ function testoDi(contenuto: BetaContentBlock[]): string {
     .join("");
 }
 
-function partiParziali(json: string): Parziale<Parte>[] {
+/** Dal primo «{»: senza output strutturato il modello può premettere testo o un blocco di codice. */
+function daGraffa(testo: string): string {
+  const inizio = testo.indexOf("{");
+  return inizio < 0 ? "" : testo.slice(inizio);
+}
+
+function partiParziali(testo: string): Parziale<Parte>[] {
+  const json = daGraffa(testo);
   if (!json.trim()) return [];
   try {
     const oggetto = parseParziale(json, Allow.ALL) as { parti?: unknown };
@@ -179,18 +188,26 @@ function partiParziali(json: string): Parziale<Parte>[] {
 }
 
 /** Parse rigoroso; se fallisce tiene le parti valide invece di perdere tutta la risposta. */
-function partiFinali(json: string): { parti: Parte[]; titolo: string } {
+function partiFinali(testo: string): { parti: Parte[]; titolo: string } {
+  const daInizio = daGraffa(testo);
+  const json = daInizio.slice(0, daInizio.lastIndexOf("}") + 1);
   try {
     const r = RispostaSchema.safeParse(JSON.parse(json));
     if (r.success) return { parti: r.data.parti, titolo: r.data.titolo_conversazione };
   } catch {
     // JSON troncato: si recupera sotto
   }
-  const parti = partiParziali(json)
+  const parti = partiParziali(daInizio)
     .map((p) => ParteSchema.safeParse(p))
     .filter((r) => r.success)
     .map((r) => r.data);
   return { parti, titolo: "" };
+}
+
+function schemaRifiutato(e: unknown): boolean {
+  if (!(e instanceof Anthropic.BadRequestError)) return false;
+  const dettaglio = (e.error as { error?: { message?: string } } | undefined)?.error?.message ?? e.message;
+  return /grammar|schema/i.test(dettaglio);
 }
 
 function erroreJsonStrumento(e: unknown): boolean {
@@ -285,9 +302,9 @@ export async function eseguiTurno(
             betas: ["server-side-fallback-2026-07-01"],
             fallbacks: "default",
             thinking: { type: "adaptive" },
-            output_config: { effort: SFORZO, format: FORMATO_RISPOSTA },
+            output_config: formatoStrutturato ? { effort: SFORZO, format: FORMATO_RISPOSTA } : { effort: SFORZO },
             cache_control: { type: "ephemeral" },
-            system: conv.sistema,
+            system: formatoStrutturato ? conv.sistema : conv.sistema + ISTRUZIONI_FORMATO,
             tools: DEFINIZIONI_STRUMENTI,
             messages: conv.apiMessaggi,
           },
@@ -307,6 +324,12 @@ export async function eseguiTurno(
         finale = await stream.finalMessage();
         if (consumo) aggiungiChiamata(consumo, finale);
       } catch (e) {
+        if (formatoStrutturato && schemaRifiutato(e)) {
+          console.warn("L'API ha rifiutato lo schema della risposta: passo al formato chiesto nel prompt.", e);
+          formatoStrutturato = false;
+          giro -= 1;
+          continue;
+        }
         if (erroreJsonStrumento(e) && tentativiJson < MAX_TENTATIVI_JSON) {
           // Il blocco tool_use non si è chiuso: non c'è un id a cui rispondere, si ripete il giro.
           tentativiJson += 1;

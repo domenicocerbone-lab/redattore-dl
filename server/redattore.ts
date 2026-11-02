@@ -15,7 +15,6 @@ import type {
 import { Allow, parse as parseParziale } from "partial-json";
 import type { EventoTurno, NuovoMessaggio } from "../shared/api";
 import {
-  ParteSchema,
   RispostaSchema,
   type FotoAllegata,
   type MessaggioAssistente,
@@ -28,6 +27,7 @@ import { dataItaliana } from "../shared/nowvision";
 import { leggiFoto, urlFoto, type ConversazioneSalvata } from "./archivio";
 import { FORMATO_RISPOSTA, ISTRUZIONI_FORMATO } from "./formato";
 import { contestoMessaggio } from "./istruzioni";
+import { parteValida } from "./riparazione";
 import { contestoPerIlModello, datiNowVision, fileRipresa, urlRipresa } from "./nowvision";
 import { DEFINIZIONI_STRUMENTI, eseguiStrumento } from "./strumenti";
 import { aggiungiChiamata, type Consumo } from "./utilizzo";
@@ -187,8 +187,12 @@ function partiParziali(testo: string): Parziale<Parte>[] {
   }
 }
 
-/** Parse rigoroso; se fallisce tiene le parti valide invece di perdere tutta la risposta. */
-function partiFinali(testo: string): { parti: Parte[]; titolo: string } {
+/**
+ * Parse rigoroso; se fallisce controlla e ripara le parti una per una invece di perdere
+ * la risposta. Senza riparazione una bozza con un campo mancante sparirebbe a fine turno
+ * dopo essere comparsa durante lo streaming.
+ */
+function partiFinali(testo: string, tipoDocumento: string): { parti: Parte[]; titolo: string } {
   const daInizio = daGraffa(testo);
   const json = daInizio.slice(0, daInizio.lastIndexOf("}") + 1);
   try {
@@ -197,11 +201,17 @@ function partiFinali(testo: string): { parti: Parte[]; titolo: string } {
   } catch {
     // JSON troncato: si recupera sotto
   }
+  let titolo = "";
+  try {
+    const oggetto = parseParziale(daInizio, Allow.ALL) as { titolo_conversazione?: unknown };
+    if (typeof oggetto?.titolo_conversazione === "string") titolo = oggetto.titolo_conversazione;
+  } catch {
+    // senza titolo
+  }
   const parti = partiParziali(daInizio)
-    .map((p) => ParteSchema.safeParse(p))
-    .filter((r) => r.success)
-    .map((r) => r.data);
-  return { parti, titolo: "" };
+    .map((p) => parteValida(p, tipoDocumento))
+    .filter((p): p is Parte => p !== null);
+  return { parti, titolo };
 }
 
 function schemaRifiutato(e: unknown): boolean {
@@ -373,11 +383,11 @@ export async function eseguiTurno(
         });
         conv.apiMessaggi.push({ role: "user", content: risultati });
         const testo = testoDi(contenuto);
-        if (testo) partiCompletate.push(...partiFinali(testo).parti);
+        if (testo) partiCompletate.push(...partiFinali(testo, conv.modalita).parti);
         continue;
       }
 
-      const risposta = partiFinali(testoDi(contenuto));
+      const risposta = partiFinali(testoDi(contenuto), conv.modalita);
       partiCompletate.push(...risposta.parti);
       titolo = risposta.titolo;
       if (finale.stop_reason === "max_tokens") {

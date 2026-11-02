@@ -52,5 +52,6 @@ export const ISTRUZIONI_FORMATO = [
   "",
   "# Formato della risposta",
   "Rispondi sempre e solo con un oggetto JSON valido conforme a questo JSON Schema: nessun testo prima o dopo, nessun blocco di codice.",
+  "Ogni proprietà è obbligatoria, anche dentro i documenti: quando non serve scrivi \"\", [] o false, non ometterla.",
   JSON.stringify(SCHEMA_RISPOSTA),
 ].join("\n");

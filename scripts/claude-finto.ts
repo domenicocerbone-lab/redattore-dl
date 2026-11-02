@@ -36,6 +36,20 @@ async function streamTesto(res: ServerResponse, indice: number, testo: string) {
 const RIFIUTA_SCHEMA = Boolean(process.env.FINTO_RIFIUTA_SCHEMA);
 let jsonInRecinto = false;
 
+/** Senza schema imposto il modello vero può saltare campi o cambiarne il tipo: lo imita. */
+function conDeviazioni(json: unknown): unknown {
+  const copia = JSON.parse(JSON.stringify(json));
+  for (const parte of copia.parti ?? []) {
+    if (parte.tipo !== "documento") continue;
+    delete parte.documento.stati;
+    parte.documento.dati_generali.colonne = String(parte.documento.dati_generali.colonne);
+    for (const sezione of parte.documento.sezioni) {
+      for (const blocco of sezione.blocchi) if (blocco.tipo === "tabella") delete blocco.allineamento;
+    }
+  }
+  return copia;
+}
+
 async function rispondi(
   res: ServerResponse,
   contenuto: { json?: unknown; strumento?: { nome: string; input: unknown } },
@@ -75,7 +89,7 @@ async function rispondi(
     sse(res, { type: "content_block_stop", index: 1 });
     stop = "tool_use";
   } else {
-    const json = JSON.stringify(contenuto.json);
+    const json = JSON.stringify(jsonInRecinto ? conDeviazioni(contenuto.json) : contenuto.json);
     // Senza output strutturato il modello vero può avvolgere il JSON in un blocco di codice.
     await streamTesto(res, 1, jsonInRecinto ? `Ecco la risposta.\n\`\`\`json\n${json}\n\`\`\`` : json);
   }

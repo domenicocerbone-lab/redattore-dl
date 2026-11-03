@@ -3,11 +3,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DatiPersona, Persona, RiepilogoUtilizzo, UtilizzoPersona } from "../../../shared/accessi";
-import { CANTIERI } from "../../../shared/cantieri";
 import { formatNumero } from "../../../shared/numeri";
 import { api } from "../../lib/api";
 import { quando } from "../../lib/date";
-import { sessione } from "../../lib/sessione";
+import { cantieriConsentiti, sessione } from "../../lib/sessione";
 import { Icona } from "../Icone";
 import { Menu, VoceMenu } from "../Menu";
 import "./admin.css";
@@ -406,7 +405,7 @@ function ModuloPersona({
     nome: persona?.nome ?? "",
     organizzazione: persona?.organizzazione ?? "",
     ruolo: persona?.ruolo ?? "Direttore dei Lavori",
-    cantieri: persona?.cantieri ?? [CANTIERI[0].id],
+    cantieri: persona?.cantieri ?? cantieriConsentiti().slice(0, 1).map((c) => c.id),
     limiteGiornaliero: persona ? persona.limiteGiornaliero : 40,
   });
   const [errore, setErrore] = useState("");
@@ -443,7 +442,7 @@ function ModuloPersona({
         {!admin && (
           <fieldset className="admin__campo admin__gruppo">
             <legend className="etichetta-mono">Cantieri che può vedere</legend>
-            {CANTIERI.map((c) => (
+            {cantieriConsentiti().map((c) => (
               <label key={c.id} className="admin__scelta">
                 <input
                   type="checkbox"

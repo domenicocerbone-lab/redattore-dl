@@ -72,3 +72,14 @@
   line-height: 1.45;
   color: var(--nv-ink-soft);
 }
+.menu__separatore {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--nv-line);
+}
+.menu__link {
+  color: var(--nv-ink);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

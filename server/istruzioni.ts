@@ -1,7 +1,8 @@
 // Prompt di sistema del Redattore DL. Fisso per tutta la conversazione: data, ora e
 // tipo di documento scelto viaggiano nei messaggi, così il prefisso resta in cache.
 
-import type { Cantiere } from "../shared/cantieri";
+import { createHash } from "node:crypto";
+import { NOMI_TIPO_ZONA, eScheda, type Cantiere, type SchedaCantiere } from "../shared/cantieri";
 import { TIPI_DOCUMENTO } from "../shared/documenti";
 import { formatEuro, formatNumero } from "../shared/numeri";
 
@@ -26,6 +27,9 @@ Non fare mai conti a mente. Per prodotti di misure, totali e deduzioni del libre
 5. Per ogni modifica richiesta riscrivi il documento intero con la parte «documento» e lo stesso titolo: l'interfaccia lo mostra come nuova versione. Se il DL ha modificato a mano la bozza, riparti dal suo testo.
 6. Con le foto e nessun tipo scelto: descrivi ciò che vedi con «foto_osservate» (una riga per foto o gruppo di foto simili), poi proponi i documenti utili con «proposte_bozze», mettendo come consigliata la bozza più utile. Le osservazioni su sicurezza (parapetti, ponteggi, DPI, scavi) vanno segnalate anche al CSE. Quando il DL sceglie una proposta, scrivi subito la bozza con «[da completare]» dove serve e poi chiedi i dati mancanti.
 7. Le decisioni che spettano al DL e che cambiano il documento (classificazioni, comunicazioni ad altri soggetti, aprire un altro documento) mettile in «da_decidere» o chiedile con azioni a scelta.
+
+## Dati del cantiere
+Computo metrico e cronoprogramma del cantiere non sono in questo prompt: consultali con gli strumenti consulta_computo (voci per zona, parole o codice) e consulta_programma (attività per zona, data o parole). Non citare voci, quantità, importi o date del computo e del programma senza averli consultati. Nella scheda del cantiere i valori segnati «(da verificare)» sono stati dedotti dai documenti di progetto: usali, ma ricordalo all'utente quando finiscono in un documento.
 
 ## Riprese 360° e dati NowVision
 Il DL può allegare riprese 360° della piattaforma NowVision (etichetta «ripresa 360° NowVision», con zona e data). Insieme alle riprese ricevi il riepilogo NowVision del cantiere: cronoprogramma con date previste, avanzamento atteso alla data di riferimento (già calcolato) e stato registrato; computo con quantità, importi e «misurato dall'IA» della piattaforma.
@@ -56,7 +60,70 @@ function catalogo(): string {
   return `## Catalogo dei documenti\nPer ogni tipo, i campi obbligatori da raccogliere (usa questi nomi nella scheda «dati_raccolti»):\n${righe.join("\n")}\n- Altro documento (\`altro\`): concorda con il DL il contenuto.`;
 }
 
-function schedaCantiere(c: Cantiere): string {
+const dataIt = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso);
+
+/** Scheda costruita con l'onboarding: soggetti, contratto, date, lavorazioni e zone, in forma compatta. */
+function schedaConfermata(c: SchedaCantiere): string {
+  const dedotto = (chiave: string) => (c.fonti[chiave]?.certezza === "dedotto" ? " (da verificare)" : "");
+  const righe = [
+    "## Cantiere",
+    `- Nome: ${c.nome}`,
+    c.lavori && `- Lavori: ${c.lavori}${dedotto("lavori")}`,
+    c.indirizzo && `- Indirizzo: ${c.indirizzo}${dedotto("indirizzo")}`,
+    `- Appalto: ${c.appalto === "pubblico" ? "pubblico (D.Lgs. 36/2023)" : "privato"}${dedotto("appalto")}`,
+    ...Object.entries(c.anagrafica).map(([k, v]) => `- ${k}: ${v}${dedotto(`anagrafica.${k}`)}`),
+  ].filter((r): r is string => Boolean(r));
+  if (c.soggetti.length) {
+    righe.push("", "Soggetti:");
+    for (const s of c.soggetti) {
+      righe.push(`- ${s.ruolo}: ${s.nome}${s.dettagli ? ` (${s.dettagli})` : ""}${s.fonte?.certezza === "dedotto" ? " (da verificare)" : ""}`);
+    }
+  }
+  const k = c.contratto;
+  const contratto = [
+    k.importo !== null && `importo contrattuale ${formatEuro(k.importo)}${dedotto("contratto.importo")}`,
+    k.oneriSicurezza !== null && `oneri della sicurezza ${formatEuro(k.oneriSicurezza)}${dedotto("contratto.oneriSicurezza")}`,
+    k.ribassoPercentuale !== null && `ribasso ${formatNumero(k.ribassoPercentuale, 3)}%${dedotto("contratto.ribassoPercentuale")}`,
+    k.ritenutaPercentuale !== null && `ritenuta a garanzia ${formatNumero(k.ritenutaPercentuale)}%${dedotto("contratto.ritenutaPercentuale")}`,
+    c.date.consegnaLavori && `consegna lavori ${dataIt(c.date.consegnaLavori)}${dedotto("date.consegnaLavori")}`,
+    c.date.durataGiorni !== null && `durata ${c.date.durataGiorni} giorni${dedotto("date.durataGiorni")}`,
+    c.date.ultimazionePrevista && `ultimazione prevista ${dataIt(c.date.ultimazionePrevista)}${dedotto("date.ultimazionePrevista")}`,
+  ].filter(Boolean);
+  if (contratto.length) righe.push("", `Contratto: ${contratto.join("; ")}.`);
+  if (c.lavorazioni.length) {
+    righe.push("", "Lavorazioni previste:");
+    righe.push(...c.lavorazioni.slice(0, 40).map((l) => `- ${l.categoria ? `${l.categoria}: ` : ""}${l.descrizione}`));
+    if (c.lavorazioni.length > 40) righe.push(`- … altre ${c.lavorazioni.length - 40}`);
+  }
+  if (c.zone.length) {
+    righe.push("", "Zone del cantiere (nome · piano · tipo · voci di computo · attività):");
+    righe.push(
+      ...c.zone
+        .slice(0, 60)
+        .map((z) => `- ${z.nome}${z.piano ? ` · ${z.piano}` : ""} · ${NOMI_TIPO_ZONA[z.tipo]} · ${z.vociComputo.length} voci · ${z.attivita.length} attività`),
+    );
+    if (c.zone.length > 60) righe.push(`- … altre ${c.zone.length - 60} zone`);
+  }
+  return righe.join("\n");
+}
+
+/** Impronta del testo della scheda: cambia solo quando cambia ciò che il modello legge. */
+export function impronteScheda(c: Cantiere): string {
+  return createHash("sha256").update(schedaCantiere(c)).digest("hex").slice(0, 16);
+}
+
+export function schedaCantiere(c: Cantiere): string {
+  if (eScheda(c)) {
+    if (c.stato === "attiva") return schedaConfermata(c);
+    return `## Cantiere
+- Nome: ${c.nome}${c.indirizzo ? `\n- Indirizzo: ${c.indirizzo}` : ""}
+
+La scheda del cantiere non è ancora stata confermata dall'utente: non dare per certi soggetti, imprese e importi, chiedili.`;
+  }
+  return schedaEsempio(c);
+}
+
+function schedaEsempio(c: Cantiere): string {
   const anagrafica = Object.entries(c.anagrafica)
     .map(([k, v]) => `- ${k}: ${v}`)
     .join("\n");

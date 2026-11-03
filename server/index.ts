@@ -6,13 +6,13 @@ import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { DatiPersona, EventoInterfaccia, Persona, Sessione } from "../shared/accessi";
 import type { EventoTurno, FotoCaricata, NuovaConversazione, NuovoMessaggio, Salute } from "../shared/api";
-import { cantiere } from "../shared/cantieri";
 import { MODALITA_FOTO, tipoDocumento } from "../shared/documenti";
 import { chiaveVersione, type FirmaApposta, type ModificaManuale } from "../shared/schema";
 import { trovaVersione, type VoceArchivio } from "../shared/versioni";
 import {
   ACCESSO_LIBERO,
   aggiornaPersona,
+  aggiungiCantiere,
   bloccato,
   caricaAccessi,
   cantieriDi,
@@ -45,8 +45,21 @@ import {
   urlFoto,
   type ConversazioneSalvata,
 } from "./archivio";
+import { TIPI_DOCUMENTO_PROGETTO, eScheda, type TipoDocumentoProgetto } from "../shared/cantieri";
+import {
+  aggiornaScheda,
+  breveCantiere,
+  caricaCantieri,
+  confermaScheda,
+  creaCantiere,
+  elencoBreve,
+  esisteCantiere,
+  scheda,
+  trovaCantiere,
+} from "./cantieri";
+import { aggiungiDocumento, eliminaDocumento, fileDocumento, proponiZone, riprendiLetture, rileggi } from "./onboarding";
 import { caricaFirme, eliminaFirma, fileFirma, firmaComeDataUrl, firmaDi, salvaFirma, type DatiFirma } from "./firme";
-import { promptDiSistema } from "./istruzioni";
+import { impronteScheda, promptDiSistema } from "./istruzioni";
 import { PdfNonDisponibile, paginaDocumento, pdfConCache } from "./pdf";
 import { eliminaRipresa, fileRipresa, salvaFile, salvaRipresa, seminaEsempi, sintesi } from "./nowvision";
 import {
@@ -84,7 +97,7 @@ const personaDella = (res: Response) => res.locals.persona as Persona;
 function titoloIniziale(modalita: string, cantiereId: string): string {
   const oggi = new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", timeZone: "Europe/Rome" });
   const breve = modalita === MODALITA_FOTO.id ? MODALITA_FOTO.breve : (tipoDocumento(modalita)?.breve ?? "Report");
-  return `${breve} ${oggi} · ${cantiere(cantiereId).breve}`;
+  return `${breve} ${oggi} · ${breveCantiere(cantiereId)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +116,7 @@ app.get("/api/sessione", (req, res) => {
     persona: { id: p.id, nome: p.nome, ruolo: p.ruolo, admin: p.admin },
     firma: firmaDi(p.id),
     iniziali: iniziali(p.nome),
-    cantieri: cantieriDi(p),
+    cantieri: elencoBreve(cantieriDi(p)),
     messaggiOggi: messaggiOggi(p.id),
     limiteGiornaliero: p.limiteGiornaliero,
     accessoLibero: ACCESSO_LIBERO,
@@ -161,7 +174,8 @@ app.post("/api/conversazioni", asincrono(async (req, res) => {
   const { modalita, cantiereId } = req.body as NuovaConversazione;
   const p = personaDella(res);
   if (!puoUsareCantiere(p, cantiereId)) return res.status(403).json({ errore: "Non hai accesso a questo cantiere." });
-  const c = cantiere(cantiereId);
+  const c = trovaCantiere(cantiereId);
+  if (!c) return res.status(404).json({ errore: "Cantiere non trovato." });
   const conv = nuovaConversazione({
     titolo: titoloIniziale(modalita, c.id),
     modalita,
@@ -169,6 +183,7 @@ app.post("/api/conversazioni", asincrono(async (req, res) => {
     sistema: promptDiSistema(c, p),
     personaId: p.id,
   });
+  if (eScheda(c) && c.stato === "attiva") conv.schedaInviata = impronteScheda(c);
   await salva(conv);
   void registra({ persona: p.id, tipo: "conversazione", conversazione: conv.id, cantiere: c.id, modalita });
   res.json(perInterfaccia(conv));
@@ -488,12 +503,140 @@ app.get("/api/firme/:file", (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Cantieri: scheda e onboarding dai documenti di progetto
+
+app.get("/api/cantieri", (_req, res) => {
+  res.json(elencoBreve(cantieriDi(personaDella(res))));
+});
+
+app.post("/api/cantieri", asincrono(async (req, res) => {
+  const p = personaDella(res);
+  try {
+    const s = await creaCantiere(String(req.body?.nome ?? ""), p.id);
+    await aggiungiCantiere(p.id, s.id);
+    void registra({ persona: p.id, tipo: "onboarding", cantiere: s.id, esito: "ok", dettaglio: `il nuovo cantiere «${s.nome}»` });
+    res.json(s);
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+/** La scheda del cantiere della richiesta, se la persona può usarlo (gli esempi non hanno scheda). */
+function schedaSua(req: Request, res: Response) {
+  const id = req.params.cantiere;
+  if (!esisteCantiere(id) || !puoUsareCantiere(personaDella(res), id)) {
+    res.status(403).json({ errore: "Non hai accesso a questo cantiere." });
+    return null;
+  }
+  const s = scheda(id);
+  if (!s) {
+    res.status(400).json({ errore: "È un cantiere di esempio: la sua scheda non si modifica." });
+    return null;
+  }
+  return s;
+}
+
+app.get("/api/cantieri/:cantiere", (req, res) => {
+  const id = req.params.cantiere;
+  if (!esisteCantiere(id) || !puoUsareCantiere(personaDella(res), id)) {
+    return res.status(403).json({ errore: "Non hai accesso a questo cantiere." });
+  }
+  res.json(trovaCantiere(id));
+});
+
+app.put("/api/cantieri/:cantiere", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  try {
+    res.json(await aggiornaScheda(s.id, req.body));
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+app.post("/api/cantieri/:cantiere/conferma", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  try {
+    const confermata = await confermaScheda(s.id);
+    void registra({ persona: personaDella(res).id, tipo: "onboarding", cantiere: s.id, esito: "ok", dettaglio: `la conferma della scheda di «${s.nome}»` });
+    res.json(confermata);
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+app.post(
+  "/api/cantieri/:cantiere/documenti",
+  express.raw({ type: "application/octet-stream", limit: "60mb" }),
+  asincrono(async (req, res) => {
+    const s = schedaSua(req, res);
+    if (!s) return;
+    const tipo = String(req.query.tipo ?? "") as TipoDocumentoProgetto;
+    if (!TIPI_DOCUMENTO_PROGETTO.includes(tipo)) return res.status(400).json({ errore: "Tipo di documento non valido." });
+    if (!Buffer.isBuffer(req.body)) return res.status(400).json({ errore: "Manca il file." });
+    try {
+      const sostituisce = typeof req.query.sostituisce === "string" ? req.query.sostituisce : undefined;
+      await aggiungiDocumento(s, tipo, String(req.query.nome ?? "documento"), req.body, personaDella(res).id, sostituisce);
+      res.json(s);
+    } catch (e) {
+      res.status(400).json({ errore: (e as Error).message });
+    }
+  }),
+);
+
+app.delete("/api/cantieri/:cantiere/documenti/:documento", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  try {
+    await eliminaDocumento(s, req.params.documento);
+    res.json(s);
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+app.post("/api/cantieri/:cantiere/documenti/:documento/rileggi", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  try {
+    rileggi(s, req.params.documento);
+    res.json(s);
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+app.get("/api/cantieri/:cantiere/documenti/:documento/file", (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  const d = s.documenti.find((x) => x.id === req.params.documento);
+  if (!d) return res.status(404).end();
+  res.setHeader("Content-Type", d.mediaType);
+  res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodeURIComponent(d.nome)}`);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.sendFile(fileDocumento(s, d), (e) => {
+    if (e && !res.headersSent) res.status(404).end();
+  });
+});
+
+app.post("/api/cantieri/:cantiere/zone/proponi", (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  if (s.zoneInPreparazione || s.documenti.some((d) => d.stato === "in_coda" || d.stato === "in_lettura")) {
+    return res.status(409).json({ errore: "Aspetta che finisca la lettura dei documenti." });
+  }
+  void proponiZone(s, personaDella(res).id);
+  res.json({ ...s, zoneInPreparazione: true });
+});
+
+// ---------------------------------------------------------------------------
 // Dati NowVision del cantiere: file xlsx e riprese 360°.
 
 /** Il cantiere della richiesta, se la persona può usarlo. */
 function cantiereSuo(req: Request, res: Response): string | null {
-  const id = cantiere(req.params.cantiere).id;
-  if (id !== req.params.cantiere || !puoUsareCantiere(personaDella(res), id)) {
+  const id = req.params.cantiere;
+  if (!esisteCantiere(id) || !puoUsareCantiere(personaDella(res), id)) {
     res.status(403).json({ errore: "Non hai accesso a questo cantiere." });
     return null;
   }
@@ -605,7 +748,9 @@ app.post("/api/admin/persone/:id/revoca", gestisci((req) => revoca(req.params.id
 
 async function avvia() {
   await preparaCartelle();
+  await caricaCantieri();
   await caricaAccessi();
+  await riprendiLetture();
   await caricaFirme();
   await caricaEventi();
   await seminaEsempi();

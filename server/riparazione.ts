@@ -8,7 +8,7 @@
 import { ParteSchema, type Parte } from "../shared/schema";
 import { SCHEMA_RISPOSTA } from "./formato";
 
-interface Schema {
+export interface Schema {
   type?: string;
   properties?: Record<string, Schema>;
   items?: Schema;
@@ -24,10 +24,16 @@ const ENUM_PRUDENTI = ["da_verificare", "da_chiarire", "attenzione", "nessuno", 
 
 const oggetto = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-function ripara(s: Schema, v: unknown, chiave: string, tipoDocumento: string): unknown {
+export function ripara(s: Schema, v: unknown, chiave = "", tipoDocumento = ""): unknown {
   if (s.anyOf) {
-    const ramo = s.anyOf.find((r) => oggetto(v) && r.properties?.tipo?.const === v.tipo);
-    return ramo ? ripara(ramo, v, chiave, tipoDocumento) : undefined;
+    // Unione con discriminante «tipo» (le parti della risposta): si ripara solo il ramo giusto.
+    if (s.anyOf.some((r) => r.properties?.tipo?.const !== undefined)) {
+      const ramo = s.anyOf.find((r) => oggetto(v) && r.properties?.tipo?.const === v.tipo);
+      return ramo ? ripara(ramo, v, chiave, tipoDocumento) : undefined;
+    }
+    // Campo che può essere null (es. un importo non scritto nel documento).
+    if ((v === null || v === undefined) && s.anyOf.some((r) => r.type === "null")) return null;
+    return ripara(s.anyOf.find((r) => r.type !== "null") ?? s.anyOf[0], v, chiave, tipoDocumento);
   }
   if (s.const !== undefined) return s.const;
   if (s.enum) {

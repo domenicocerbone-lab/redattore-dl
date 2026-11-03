@@ -8,6 +8,7 @@ import type {
   Salute,
 } from "../../shared/api";
 import type { DatiPersona, EventoInterfaccia, FirmaProfilo, Persona, RiepilogoUtilizzo } from "../../shared/accessi";
+import type { Cantiere, CantiereBreve, SchedaCantiere, TipoDocumentoProgetto } from "../../shared/cantieri";
 import type { Ripresa, SintesiNowVision } from "../../shared/nowvision";
 import type { Conversazione, ConversazioneMeta, FirmaApposta, ModificaManuale, StatoVersione } from "../../shared/schema";
 import type { VoceArchivio } from "../../shared/versioni";
@@ -66,6 +67,17 @@ export const api = {
     const q = new URLSearchParams(Object.entries(filtri).filter((x): x is [string, string] => Boolean(x[1])));
     return json<VoceArchivio[]>(fetch(`/api/documenti?${q}`));
   },
+  cantieri: () => json<CantiereBreve[]>(fetch("/api/cantieri")),
+  cantiere: (id: string) => json<Cantiere | SchedaCantiere>(fetch(`/api/cantieri/${id}`)),
+  creaCantiere: (nome: string) => json<SchedaCantiere>(invia("POST", "/api/cantieri", { nome })),
+  aggiornaCantiere: (id: string, dati: Partial<SchedaCantiere>) =>
+    json<SchedaCantiere>(invia("PUT", `/api/cantieri/${id}`, dati)),
+  confermaCantiere: (id: string) => json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/conferma`, {})),
+  eliminaDocumentoProgetto: (id: string, documento: string) =>
+    json<SchedaCantiere>(fetch(`/api/cantieri/${id}/documenti/${documento}`, { method: "DELETE" })),
+  rileggiDocumento: (id: string, documento: string) =>
+    json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/documenti/${documento}/rileggi`, {})),
+  proponiZone: (id: string) => json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/zone/proponi`, {})),
   firma: () => json<FirmaProfilo | null>(fetch("/api/profilo/firma")),
   salvaFirma: (dati: { immagine?: string; nome: string; titolo: string; albo: string }) =>
     json<FirmaProfilo>(invia("PUT", "/api/profilo/firma", dati)),
@@ -155,4 +167,34 @@ export async function scaricaPdf(conversazione: string, documento: string, versi
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Carica un documento di progetto come file binario, con l'avanzamento del caricamento. */
+export function caricaDocumentoProgetto(
+  cantiere: string,
+  tipo: TipoDocumentoProgetto,
+  file: Blob,
+  nome: string,
+  suAvanzamento: (frazione: number) => void,
+): Promise<SchedaCantiere> {
+  return new Promise((risolvi, rifiuta) => {
+    const xhr = new XMLHttpRequest();
+    const q = new URLSearchParams({ tipo, nome });
+    xhr.open("POST", `/api/cantieri/${cantiere}/documenti?${q}`);
+    xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    xhr.upload.onprogress = (e) => e.lengthComputable && suAvanzamento(e.loaded / e.total);
+    xhr.onload = () => {
+      if (xhr.status === 401) sessioneScaduta();
+      let corpo: { errore?: string } | SchedaCantiere | null = null;
+      try {
+        corpo = JSON.parse(xhr.responseText);
+      } catch {
+        // risposta non JSON
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && corpo) risolvi(corpo as SchedaCantiere);
+      else rifiuta(new Error((corpo as { errore?: string } | null)?.errore ?? `Errore ${xhr.status}`));
+    };
+    xhr.onerror = () => rifiuta(new Error("Caricamento non riuscito: controlla la connessione."));
+    xhr.send(file);
+  });
 }

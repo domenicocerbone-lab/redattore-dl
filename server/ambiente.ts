@@ -6,3 +6,6 @@ try {
 }
 
 export const PRODUZIONE = process.env.NODE_ENV === "production" || process.argv.includes("--produzione");
+
+/** Senza password dell'amministratore e fuori produzione l'accesso è libero, come in sviluppo e in demo. */
+export const ACCESSO_LIBERO = !process.env.REDATTORE_PASSWORD_ADMIN && !PRODUZIONE;

@@ -1,12 +1,12 @@
 // Conversazione con il Redattore e, a destra, la bozza aperta.
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { cantiere } from "../../shared/cantieri";
 import { MODALITA_FOTO, nomeModalita, tipoDocumento } from "../../shared/documenti";
 import type { Documento, FirmaApposta, Parziale, RifDocumento } from "../../shared/schema";
 import type { StatoDocumento } from "../../shared/versioni";
 import { dataCompleta } from "../lib/date";
 import { useNowVision } from "../lib/nowvision";
+import { infoCantiere } from "../lib/sessione";
 import { documentiDi, type DocumentoConversazione } from "../lib/documenti";
 import {
   impostaFeedback,
@@ -112,7 +112,7 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
     );
   }
 
-  const c = cantiere(conv.cantiereId);
+  const c = infoCantiere(conv.cantiereId);
   const tipo = tipoDocumento(conv.modalita);
   const foto = conv.modalita === MODALITA_FOTO.id;
   const haDocumenti = documenti.size > 0;

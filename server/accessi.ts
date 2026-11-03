@@ -7,9 +7,10 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import path from "node:path";
 import type { NextFunction, Request, Response } from "express";
 import type { DatiPersona, Persona } from "../shared/accessi";
-import { CANTIERI, UTENTE } from "../shared/cantieri";
-import { PRODUZIONE } from "./ambiente";
+import { UTENTE } from "../shared/cantieri";
+import { ACCESSO_LIBERO, PRODUZIONE } from "./ambiente";
 import { CARTELLA_DATI, leggiJson, scriviAtomico } from "./archivio-json";
+import { esisteCantiere, idVisibili } from "./cantieri";
 
 const FILE_PERSONE = path.join(CARTELLA_DATI, "persone.json");
 const FILE_SESSIONI = path.join(CARTELLA_DATI, "sessioni.json");
@@ -17,7 +18,7 @@ const PASSWORD_ADMIN = process.env.REDATTORE_PASSWORD_ADMIN ?? "";
 const COOKIE = "redattore_sessione";
 const DURATA_SESSIONE = 180 * 24 * 60 * 60 * 1000;
 
-export const ACCESSO_LIBERO = !PASSWORD_ADMIN && !PRODUZIONE;
+export { ACCESSO_LIBERO };
 export const ID_ADMIN = "admin";
 
 interface PersonaSalvata extends Persona {
@@ -52,7 +53,6 @@ function pubblica({ codiceHash: _codice, ...p }: PersonaSalvata): Persona {
   return p;
 }
 
-const TUTTI_I_CANTIERI = () => CANTIERI.map((c) => c.id);
 
 /** In accesso libero c'è una sola persona: chi ha avviato il server. */
 const PERSONA_LOCALE: Persona = {
@@ -60,7 +60,8 @@ const PERSONA_LOCALE: Persona = {
   nome: UTENTE.nome,
   organizzazione: "",
   ruolo: UTENTE.ruolo,
-  cantieri: TUTTI_I_CANTIERI(),
+  // Amministratore: vede tutti i cantieri senza elencarli qui.
+  cantieri: [],
   limiteGiornaliero: null,
   admin: true,
   creataIl: new Date(0).toISOString(),
@@ -75,7 +76,8 @@ export function iniziali(nome: string): string {
 }
 
 export function cantieriDi(p: Persona): string[] {
-  return p.admin ? TUTTI_I_CANTIERI() : p.cantieri.filter((id) => CANTIERI.some((c) => c.id === id));
+  const visibili = idVisibili();
+  return p.admin ? visibili : p.cantieri.filter((id) => visibili.includes(id));
 }
 
 export function puoUsareCantiere(p: Persona, cantiereId: string): boolean {
@@ -221,7 +223,7 @@ function pulisci(dati: Partial<DatiPersona>): Partial<DatiPersona> {
   if (typeof dati.nome === "string") esito.nome = dati.nome.trim().slice(0, 80);
   if (typeof dati.organizzazione === "string") esito.organizzazione = dati.organizzazione.trim().slice(0, 80);
   if (typeof dati.ruolo === "string") esito.ruolo = dati.ruolo.trim().slice(0, 60);
-  if (Array.isArray(dati.cantieri)) esito.cantieri = dati.cantieri.filter((id) => CANTIERI.some((c) => c.id === id));
+  if (Array.isArray(dati.cantieri)) esito.cantieri = dati.cantieri.filter((id) => esisteCantiere(id));
   if (dati.limiteGiornaliero === null) esito.limiteGiornaliero = null;
   else if (Number.isFinite(dati.limiteGiornaliero))
     esito.limiteGiornaliero = Math.max(0, Math.min(1000, Math.round(Number(dati.limiteGiornaliero))));
@@ -285,4 +287,12 @@ export async function revoca(id: string, revocata: boolean): Promise<Persona> {
   }
   await salvaPersone();
   return pubblica(p);
+}
+
+/** Chi crea un cantiere lo vede subito (l'amministratore li vede già tutti). */
+export async function aggiungiCantiere(personaId: string, cantiereId: string) {
+  const p = persone.find((x) => x.id === personaId);
+  if (!p || p.admin || p.cantieri.includes(cantiereId)) return;
+  p.cantieri.push(cantiereId);
+  await salvaPersone();
 }

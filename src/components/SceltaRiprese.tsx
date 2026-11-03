@@ -2,13 +2,13 @@
 // riprese 360° per data e zona da allegare al messaggio, import di nuovi file.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cantiere } from "../../shared/cantieri";
 import type { Ripresa, SintesiNowVision } from "../../shared/nowvision";
 import { formatEuro, formatNumero } from "../../shared/numeri";
 import { api } from "../lib/api";
 import { preparaFoto } from "../lib/immagini";
 import { comeBase64, dataBreve } from "../lib/nowvision";
 import { Icona } from "./Icone";
+import { infoCantiere } from "../lib/sessione";
 import "./riprese.css";
 
 interface Props {
@@ -128,7 +128,7 @@ export function SceltaRiprese({ cantiereId, sintesi, onAggiornata, onUsa, onChiu
         <header className="riprese__testa">
           <div className="riprese__titolo">
             <span className="pillola">NowVision</span>
-            <h2 id="riprese-titolo">Riprese 360° · {cantiere(cantiereId).nome}</h2>
+            <h2 id="riprese-titolo">Riprese 360° · {infoCantiere(cantiereId).nome}</h2>
           </div>
           <button type="button" className="btn-icona" aria-label="Chiudi" onClick={onChiudi}>
             <Icona nome="chiudi" dimensione={18} />

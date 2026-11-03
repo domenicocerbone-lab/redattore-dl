@@ -1,6 +1,5 @@
-// Anagrafica di esempio dei cantieri e dell'utente.
-// In produzione questi dati arrivano dalla piattaforma NowVision: qui servono
-// a dare al Redattore le intestazioni dei documenti senza doverle chiedere.
+// Cantieri: i tipi della scheda costruita con l'onboarding dai documenti di progetto
+// e i cantieri di esempio, visibili solo in demo e in sviluppo.
 
 export interface VoceElencoPrezzi {
   tariffa: string;
@@ -30,6 +29,153 @@ export interface Cantiere {
     ritenutaPercentuale: number;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Scheda del cantiere, costruita con l'onboarding e confermata dall'utente
+
+/** Da dove viene un valore: documento, pagina e se è scritto alla lettera o dedotto. */
+export interface Fonte {
+  documento: string;
+  pagina?: number;
+  certezza: "letto" | "dedotto";
+}
+
+export interface Soggetto {
+  /** «Committente», «Impresa esecutrice», «Direttore dei Lavori», «CSE»… */
+  ruolo: string;
+  nome: string;
+  /** Sede, partita IVA, recapiti o iscrizioni, se scritti nei documenti. */
+  dettagli: string;
+  fonte?: Fonte;
+}
+
+export interface Lavorazione {
+  categoria: string;
+  descrizione: string;
+  fonte?: Fonte;
+}
+
+export const TIPI_ZONA = ["unita", "parti_comuni", "esterni", "facciata", "struttura", "impianti"] as const;
+export type TipoZona = (typeof TIPI_ZONA)[number];
+export const NOMI_TIPO_ZONA: Record<TipoZona, string> = {
+  unita: "Unità",
+  parti_comuni: "Parti comuni",
+  esterni: "Esterni",
+  facciata: "Facciata",
+  struttura: "Struttura",
+  impianti: "Impianti",
+};
+
+/**
+ * Zona del cantiere: un elenco logico, senza geometria. Collega voci di computo e
+ * attività del programma; servirà anche ad assegnare riprese 360° e foto.
+ */
+export interface Zona {
+  id: string;
+  nome: string;
+  piano: string;
+  tipo: TipoZona;
+  /** Codici WBS delle voci di computo. */
+  vociComputo: string[];
+  /** Codici WBS delle attività del cronoprogramma. */
+  attivita: string[];
+  planimetria?: { documento: string; pagina?: number };
+  note: string;
+  certezza: "letto" | "dedotto";
+}
+
+export const TIPI_DOCUMENTO_PROGETTO = ["contratto", "computo", "cronoprogramma", "planimetria", "psc", "altro"] as const;
+export type TipoDocumentoProgetto = (typeof TIPI_DOCUMENTO_PROGETTO)[number];
+export const NOMI_DOCUMENTO_PROGETTO: Record<TipoDocumentoProgetto, string> = {
+  contratto: "Contratto o capitolato",
+  computo: "Computo metrico",
+  cronoprogramma: "Cronoprogramma",
+  planimetria: "Planimetrie",
+  psc: "PSC o notifica preliminare",
+  altro: "Altro documento",
+};
+
+export type StatoLettura = "in_coda" | "in_lettura" | "letto" | "errore";
+
+export interface DocumentoProgetto {
+  id: string;
+  nome: string;
+  tipo: TipoDocumentoProgetto;
+  /** Nome del file su disco, in data/cantieri/<id>/documenti/. */
+  file: string;
+  mediaType: string;
+  byte: number;
+  pagine: number | null;
+  hash: string;
+  caricatoIl: string;
+  caricatoDa: string;
+  stato: StatoLettura;
+  /** «7 soggetti, importo, 12 lavorazioni»: cosa ha trovato la lettura. */
+  trovato: string;
+  errore?: string;
+  lettoIl?: string;
+  costo?: number;
+  /** Se è una nuova versione di un documento già letto: cosa è cambiato, da ricontrollare. */
+  differenze?: string[];
+}
+
+/** Domanda chiusa che la proposta delle zone lascia all'utente. */
+export interface Decisione {
+  id: string;
+  domanda: string;
+  opzioni: string[];
+  risposta: string;
+}
+
+export interface DatiContratto {
+  importo: number | null;
+  oneriSicurezza: number | null;
+  ribassoPercentuale: number | null;
+  ritenutaPercentuale: number | null;
+}
+
+export interface SchedaCantiere extends Cantiere {
+  scheda: true;
+  /** «bozza» finché l'utente non conferma: il Redattore usa i dati solo da «attiva». */
+  stato: "bozza" | "attiva";
+  creatoDa: string;
+  creatoIl: string;
+  aggiornataIl: string;
+  confermataIl?: string;
+  soggetti: Soggetto[];
+  contratto: DatiContratto;
+  date: { consegnaLavori: string; durataGiorni: number | null; ultimazionePrevista: string };
+  lavorazioni: Lavorazione[];
+  zone: Zona[];
+  /** Codici delle voci di computo che la proposta non ha messo in nessuna zona. */
+  vociSenzaZona: string[];
+  decisioni: Decisione[];
+  documenti: DocumentoProgetto[];
+  /** Fonte di ogni valore estratto, per percorso: «soggetti.2», «contratto.importo»… */
+  fonti: Record<string, Fonte>;
+  /** La proposta delle zone è in corso o è da rifare. */
+  zoneInPreparazione?: boolean;
+}
+
+export function eScheda(c: Cantiere): c is SchedaCantiere {
+  return (c as SchedaCantiere).scheda === true;
+}
+
+/** Quello che l'interfaccia sa di ogni cantiere a cui ha accesso, dalla sessione. */
+export interface CantiereBreve {
+  id: string;
+  nome: string;
+  breve: string;
+  indirizzo: string;
+  stato: "bozza" | "attiva" | "esempio";
+}
+
+export function breveDi(c: Cantiere): CantiereBreve {
+  return { id: c.id, nome: c.nome, breve: c.breve, indirizzo: c.indirizzo, stato: eScheda(c) ? c.stato : "esempio" };
+}
+
+// ---------------------------------------------------------------------------
+// Esempi
 
 export const UTENTE = {
   nome: "Ing. Marco Esempio",
@@ -114,6 +260,7 @@ export const CANTIERI: Cantiere[] = [
   },
 ];
 
-export function cantiere(id: string | undefined): Cantiere {
-  return CANTIERI.find((c) => c.id === id) ?? CANTIERI[0];
+/** Un cantiere di esempio, se l'id è uno di quelli. */
+export function esempio(id: string | undefined): Cantiere | undefined {
+  return CANTIERI.find((c) => c.id === id);
 }

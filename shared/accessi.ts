@@ -29,11 +29,14 @@ export interface FirmaProfilo {
   aggiornataIl: string;
 }
 
+import type { CantiereBreve } from "./cantieri";
+
 export interface Sessione {
   persona: Pick<Persona, "id" | "nome" | "ruolo" | "admin">;
   firma: FirmaProfilo | null;
   iniziali: string;
-  cantieri: string[];
+  /** I cantieri che la persona può usare: le schede, e in demo anche gli esempi. */
+  cantieri: CantiereBreve[];
   messaggiOggi: number;
   limiteGiornaliero: number | null;
   /** true in sviluppo e in demo: nessun login. */

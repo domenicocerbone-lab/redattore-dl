@@ -6,7 +6,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { BetaMessage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { ConteggiUtilizzo, Persona, RiepilogoUtilizzo, UtilizzoPersona, VoceAttivita } from "../shared/accessi";
-import { cantiere } from "../shared/cantieri";
+import { breveCantiere, nomeCantiere } from "./cantieri";
 import { nomeModalita } from "../shared/documenti";
 import { formatNumero } from "../shared/numeri";
 
@@ -25,7 +25,8 @@ export type TipoEvento =
   | "copia"
   | "nowvision"
   | "firma"
-  | "definitivo";
+  | "definitivo"
+  | "onboarding";
 
 export interface Evento {
   il: string;
@@ -165,6 +166,8 @@ function conta(lista: Evento[]): ConteggiUtilizzo {
       c.bozze += e.bozze?.length ?? 0;
       c.costo += e.costo ?? 0;
     }
+    // La lettura dei documenti di progetto è un costo API come le risposte.
+    if (e.tipo === "onboarding") c.costo += e.costo ?? 0;
     if (e.tipo === "esportazione") c.esportazioni += 1;
   }
   return c;
@@ -180,7 +183,7 @@ function descrivi(e: Evento): string {
     case "visita":
       return "ha aperto il Redattore";
     case "conversazione":
-      return `ha iniziato un report: ${nomeModalita(e.modalita ?? "")}${e.cantiere ? ` · ${cantiere(e.cantiere).breve}` : ""}`;
+      return `ha iniziato un report: ${nomeModalita(e.modalita ?? "")}${e.cantiere ? ` · ${breveCantiere(e.cantiere)}` : ""}`;
     case "messaggio": {
       const allegati = [
         e.riprese ? plurale(e.riprese, "ripresa 360°", "riprese 360°") : "",
@@ -207,6 +210,10 @@ function descrivi(e: Evento): string {
       return e.dettaglio ?? "ha aggiornato i dati NowVision";
     case "firma":
       return e.modalita === "tolta" ? `ha tolto la firma da «${e.dettaglio ?? "documento"}»` : `ha firmato «${e.dettaglio ?? "documento"}»`;
+    case "onboarding":
+      return e.esito === "errore"
+        ? `lettura non riuscita: ${e.dettaglio ?? "documento"}`
+        : `ha fatto leggere ${e.dettaglio ?? "un documento di progetto"}`;
     case "definitivo":
       return e.modalita === "bozza"
         ? `ha riportato in bozza «${e.dettaglio ?? "documento"}»`
@@ -244,7 +251,7 @@ export function riepilogo(giorni: number, persone: Persona[], nomeDi: (id: strin
       persona: nomeDi(e.persona),
       descrizione: descrivi(e),
       conversazione: e.conversazione,
-      costo: e.tipo === "risposta" ? e.costo : undefined,
+      costo: e.tipo === "risposta" || e.tipo === "onboarding" ? e.costo : undefined,
     }));
 
   return {
@@ -266,7 +273,7 @@ export function eventiCsv(nomeDi: (id: string) => string): string {
       nomeDi(e.persona),
       e.tipo,
       descrivi(e),
-      e.cantiere ? cantiere(e.cantiere).nome : "",
+      e.cantiere ? nomeCantiere(e.cantiere) : "",
       e.conversazione ?? "",
       e.costo !== undefined ? formatNumero(e.costo, 4) : "",
       e.token ? e.token.input + e.token.cacheScritti + e.token.cacheLetti : "",

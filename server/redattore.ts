@@ -26,14 +26,15 @@ import {
 import { dataItaliana } from "../shared/nowvision";
 import { leggiFoto, urlFoto, type ConversazioneSalvata } from "./archivio";
 import { FORMATO_RISPOSTA, ISTRUZIONI_FORMATO } from "./formato";
-import { contestoMessaggio } from "./istruzioni";
+import { scheda } from "./cantieri";
+import { contestoMessaggio, impronteScheda, schedaCantiere } from "./istruzioni";
 import { parteValida } from "./riparazione";
 import { contestoPerIlModello, datiNowVision, fileRipresa, urlRipresa } from "./nowvision";
 import { DEFINIZIONI_STRUMENTI, eseguiStrumento } from "./strumenti";
 import { aggiungiChiamata, type Consumo } from "./utilizzo";
 
 export const MODELLO = process.env.REDATTORE_MODELLO ?? "claude-opus-5-5";
-const SFORZO = (process.env.REDATTORE_SFORZO ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
+export const SFORZO = (process.env.REDATTORE_SFORZO ?? "high") as "low" | "medium" | "high" | "xhigh" | "max";
 const MAX_GIRI = 6;
 const MAX_TENTATIVI_JSON = 2;
 
@@ -43,7 +44,7 @@ const MAX_TENTATIVI_JSON = 2;
 let formatoStrutturato = process.env.REDATTORE_FORMATO !== "prompt";
 
 let client: Anthropic | null = null;
-function anthropic(): Anthropic {
+export function anthropic(): Anthropic {
   // Credenziali dall'ambiente: ANTHROPIC_API_KEY (o ANTHROPIC_AUTH_TOKEN).
   client ??= new Anthropic();
   return client;
@@ -65,6 +66,15 @@ export async function aggiungiMessaggioUtente(
 
   const intestazione = [contestoMessaggio(new Date(), input.modalita ?? (conv.messaggi.length ? undefined : conv.modalita))];
   intestazione.push(...conv.notePendenti);
+  // La scheda del cantiere è cambiata dopo l'inizio della conversazione: il prompt è fisso, la nota no.
+  const c = scheda(conv.cantiereId);
+  if (c?.stato === "attiva") {
+    const impronta = impronteScheda(c);
+    if (conv.schedaInviata !== impronta) {
+      intestazione.push(`[La scheda del cantiere è stata aggiornata: usa questi dati al posto di quelli del prompt.\n${schedaCantiere(c)}]`);
+    }
+    conv.schedaInviata = impronta;
+  }
   conv.notePendenti = [];
   if (input.dettato) {
     intestazione.push("[Messaggio dettato a voce: possibili errori di trascrizione su nomi e numeri.]");
@@ -171,7 +181,7 @@ function testoDi(contenuto: BetaContentBlock[]): string {
 }
 
 /** Dal primo «{»: senza output strutturato il modello può premettere testo o un blocco di codice. */
-function daGraffa(testo: string): string {
+export function daGraffa(testo: string): string {
   const inizio = testo.indexOf("{");
   return inizio < 0 ? "" : testo.slice(inizio);
 }
@@ -214,7 +224,7 @@ function partiFinali(testo: string, tipoDocumento: string): { parti: Parte[]; ti
   return { parti, titolo };
 }
 
-function schemaRifiutato(e: unknown): boolean {
+export function schemaRifiutato(e: unknown): boolean {
   if (!(e instanceof Anthropic.BadRequestError)) return false;
   const dettaglio = (e.error as { error?: { message?: string } } | undefined)?.error?.message ?? e.message;
   return /grammar|schema/i.test(dettaglio);
@@ -370,17 +380,19 @@ export async function eseguiTurno(
 
       if (usi.length > 0) {
         const troncato = finale.stop_reason === "max_tokens";
-        const risultati: BetaToolResultBlockParam[] = usi.map((uso) => {
-          const esito = troncato
-            ? { contenuto: "Input troncato per limite di lunghezza: ripeti la chiamata.", errore: true }
-            : eseguiStrumento(uso.name, uso.input);
-          return {
-            type: "tool_result",
-            tool_use_id: uso.id,
-            content: esito.contenuto,
-            ...(esito.errore ? { is_error: true } : {}),
-          };
-        });
+        const risultati: BetaToolResultBlockParam[] = await Promise.all(
+          usi.map(async (uso): Promise<BetaToolResultBlockParam> => {
+            const esito = troncato
+              ? { contenuto: "Input troncato per limite di lunghezza: ripeti la chiamata.", errore: true }
+              : await eseguiStrumento(uso.name, uso.input, { cantiereId: conv.cantiereId });
+            return {
+              type: "tool_result",
+              tool_use_id: uso.id,
+              content: esito.contenuto,
+              ...(esito.errore ? { is_error: true } : {}),
+            };
+          }),
+        );
         conv.apiMessaggi.push({ role: "user", content: risultati });
         const testo = testoDi(contenuto);
         if (testo) partiCompletate.push(...partiFinali(testo, conv.modalita).parti);

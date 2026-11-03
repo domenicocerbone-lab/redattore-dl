@@ -25,6 +25,8 @@ export interface ConversazioneSalvata extends Conversazione {
   nowvisionInviato?: string;
   /** Chi l'ha creata. Le conversazioni senza proprietario sono dell'amministratore. */
   personaId?: string;
+  /** Impronta della scheda del cantiere che il modello conosce: se cambia, gli arriva quella nuova. */
+  schedaInviata?: string;
 }
 
 export interface FotoSalvata {
@@ -59,7 +61,7 @@ export function meta(c: Conversazione): ConversazioneMeta {
 
 /** Ciò che l'interfaccia riceve: senza prompt né cronologia API. */
 export function perInterfaccia(c: ConversazioneSalvata): Conversazione {
-  const { sistema, apiMessaggi, inizioTurno, contatoreFoto, notePendenti, nowvisionInviato, personaId, ...resto } = c;
+  const { sistema, apiMessaggi, inizioTurno, contatoreFoto, notePendenti, nowvisionInviato, personaId, schedaInviata, ...resto } = c;
   return resto;
 }
 

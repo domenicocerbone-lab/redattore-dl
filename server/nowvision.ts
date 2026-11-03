@@ -17,6 +17,7 @@ import {
   type VoceComputo,
 } from "../shared/nowvision";
 import { formatEuro, formatNumero } from "../shared/numeri";
+import { scriviAtomico } from "./archivio-json";
 
 const CARTELLA = path.join(path.resolve(process.env.REDATTORE_DATI ?? "data"), "nowvision");
 const ESEMPI = path.resolve("esempi", "nowvision");
@@ -24,9 +25,12 @@ const ID_VALIDO = /^[a-zA-Z0-9-]+$/;
 
 type Cella = string | number | boolean | Date | null;
 
+/** «json»: dati estratti dai documenti di progetto (onboarding) invece dell'xlsx NowVision. */
+type FileIndice = FileCaricato & { formato?: "json" };
+
 interface Indice {
-  computo?: FileCaricato;
-  cronoprogramma?: FileCaricato;
+  computo?: FileIndice;
+  cronoprogramma?: FileIndice;
   riprese: Omit<Ripresa, "url">[];
 }
 
@@ -44,10 +48,34 @@ async function leggiIndice(cantiereId: string): Promise<Indice> {
 }
 
 async function scriviIndice(cantiereId: string, indice: Indice) {
-  await fs.mkdir(cartella(cantiereId), { recursive: true });
-  const file = path.join(cartella(cantiereId), "indice.json");
-  await fs.writeFile(`${file}.tmp`, JSON.stringify(indice, null, 2));
-  await fs.rename(`${file}.tmp`, file);
+  await scriviAtomico(path.join(cartella(cantiereId), "indice.json"), JSON.stringify(indice, null, 2));
+}
+
+const FILE_ESTRATTI = { computo: "computo.json", cronoprogramma: "programma.json" } as const;
+
+/** Computo o programma letti dai documenti di progetto: prendono il posto dell'xlsx NowVision. */
+export async function salvaEstratti(
+  cantiereId: string,
+  tipo: "computo" | "cronoprogramma",
+  nome: string,
+  dati: VoceComputo[] | { attivita: AttivitaProgramma[]; note: string[] },
+) {
+  await scriviAtomico(path.join(cartella(cantiereId), FILE_ESTRATTI[tipo]), JSON.stringify(dati));
+  const indice = await leggiIndice(cantiereId);
+  indice[tipo] = { nome, caricatoIl: new Date().toISOString(), formato: "json" };
+  await scriviIndice(cantiereId, indice);
+}
+
+export async function rimuoviEstratti(cantiereId: string, tipo: "computo" | "cronoprogramma") {
+  const indice = await leggiIndice(cantiereId);
+  if (indice[tipo]?.formato !== "json") return;
+  delete indice[tipo];
+  await scriviIndice(cantiereId, indice);
+  await fs.rm(path.join(cartella(cantiereId), FILE_ESTRATTI[tipo]), { force: true });
+}
+
+async function leggiEstratti<T>(cantiereId: string, tipo: "computo" | "cronoprogramma"): Promise<T> {
+  return JSON.parse(await fs.readFile(path.join(cartella(cantiereId), FILE_ESTRATTI[tipo]), "utf8")) as T;
 }
 
 /** Al primo avvio copia i dati di esempio (se ci sono) nella cartella dati. */
@@ -329,7 +357,9 @@ export async function datiNowVision(cantiereId: string): Promise<DatiNowVision> 
     ? {
         ...indice.computo,
         voci: await memorizzato(`${cantiereId}/computo`, indice.computo.caricatoIl, () =>
-          leggiComputo(path.join(base, NOMI_FILE.computo)),
+          indice.computo?.formato === "json"
+            ? leggiEstratti<VoceComputo[]>(cantiereId, "computo")
+            : leggiComputo(path.join(base, NOMI_FILE.computo)),
         ),
       }
     : null;
@@ -337,7 +367,9 @@ export async function datiNowVision(cantiereId: string): Promise<DatiNowVision> 
     ? {
         ...indice.cronoprogramma,
         ...(await memorizzato(`${cantiereId}/programma`, indice.cronoprogramma.caricatoIl, () =>
-          leggiProgramma(path.join(base, NOMI_FILE.cronoprogramma)),
+          indice.cronoprogramma?.formato === "json"
+            ? leggiEstratti<{ attivita: AttivitaProgramma[]; note: string[] }>(cantiereId, "cronoprogramma")
+            : leggiProgramma(path.join(base, NOMI_FILE.cronoprogramma)),
         )),
       }
     : null;

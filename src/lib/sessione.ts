@@ -3,7 +3,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { Sessione } from "../../shared/accessi";
-import { CANTIERI, type Cantiere } from "../../shared/cantieri";
+import type { CantiereBreve } from "../../shared/cantieri";
 
 let corrente: Sessione | null = null;
 const suScaduta = new Set<() => void>();
@@ -37,8 +37,21 @@ export function useSessione(): Sessione | null {
   return useSyncExternalStore(sottoscrivi, () => corrente);
 }
 
-export function cantieriConsentiti(): Cantiere[] {
-  return CANTIERI.filter((c) => corrente?.cantieri.includes(c.id));
+export function cantieriConsentiti(): CantiereBreve[] {
+  return corrente?.cantieri ?? [];
+}
+
+/** Nome e indirizzo di un cantiere dalla sessione, anche se non è più tra quelli visibili. */
+export function infoCantiere(id: string): CantiereBreve {
+  return (
+    corrente?.cantieri.find((c) => c.id === id) ?? {
+      id,
+      nome: "Cantiere non più disponibile",
+      breve: "cantiere non disponibile",
+      indirizzo: "",
+      stato: "esempio",
+    }
+  );
 }
 
 /** Link revocato o sessione scaduta a metà lavoro: l'app torna alla schermata di accesso. */

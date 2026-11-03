@@ -2,13 +2,12 @@
 // con filtri per cantiere e tipo. L'amministratore può vedere quelli di tutte le persone.
 
 import { useEffect, useMemo, useState } from "react";
-import { cantiere } from "../../../shared/cantieri";
 import { TIPI_DOCUMENTO, tipoDocumento } from "../../../shared/documenti";
 import { linkDocumento, type StatoDocumento, type VoceArchivio } from "../../../shared/versioni";
 import { api, scaricaPdf } from "../../lib/api";
 import { quando } from "../../lib/date";
 import { nomeFile } from "../../lib/documenti";
-import { cantieriConsentiti, useSessione } from "../../lib/sessione";
+import { cantieriConsentiti, infoCantiere, useSessione } from "../../lib/sessione";
 import { Icona } from "../Icone";
 import "./documenti.css";
 
@@ -197,7 +196,7 @@ export default function PaginaDocumenti({ onApriMenu }: { onApriMenu: () => void
                       <span className="documenti__nome">{v.titolo}</span>
                       <span className="documenti__dettagli">
                         {[
-                          cantiere(v.cantiereId).breve,
+                          infoCantiere(v.cantiereId).breve,
                           quando(v.aggiornatoIl),
                           v.versioni > 1 ? `v${v.versione} di ${v.versioni}` : `v${v.versione}`,
                           v.modificata ? "modificata a mano" : "",

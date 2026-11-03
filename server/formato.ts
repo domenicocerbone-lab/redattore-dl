@@ -23,7 +23,7 @@ const CHIAVI_SUPPORTATE = new Set([
   "$defs",
 ]);
 
-function perApi(nodo: unknown): unknown {
+export function perApi(nodo: unknown): unknown {
   if (Array.isArray(nodo)) return nodo.map(perApi);
   if (nodo === null || typeof nodo !== "object") return nodo;
   const fuori: Record<string, unknown> = {};
@@ -43,7 +43,12 @@ function perApi(nodo: unknown): unknown {
   return fuori;
 }
 
-export const SCHEMA_RISPOSTA = perApi(z.toJSONSchema(RispostaSchema)) as Record<string, unknown>;
+/** Lo schema JSON di un oggetto zod, nella forma accettata dall'output strutturato dell'API. */
+export function schemaPerApi(schema: z.ZodType): Record<string, unknown> {
+  return perApi(z.toJSONSchema(schema)) as Record<string, unknown>;
+}
+
+export const SCHEMA_RISPOSTA = schemaPerApi(RispostaSchema);
 
 export const FORMATO_RISPOSTA = { type: "json_schema" as const, schema: SCHEMA_RISPOSTA };
 

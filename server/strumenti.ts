@@ -90,6 +90,7 @@ const ConsultaComputoInput = z.object({
   zona: z.string().optional().describe("Nome della zona della scheda del cantiere, es. «Corpo scala B»."),
   cerca: z.string().optional().describe("Parole da cercare nella descrizione, es. «massetto»."),
   codice: z.string().optional().describe("Codice WBS o inizio del codice, es. «3.2»."),
+  categoria: z.string().optional().describe("Categoria di lavorazione, es. «Strutture» o «Impianti»."),
 });
 
 const ConsultaProgrammaInput = z.object({
@@ -101,7 +102,7 @@ const ConsultaProgrammaInput = z.object({
 export const STRUMENTI = {
   consulta_computo: strumento(
     "consulta_computo",
-    "Cerca nel computo metrico del cantiere le voci di una zona, con certe parole nella descrizione o con un codice. Restituisce codice, descrizione, unità, quantità, prezzo, importo, zone e misurato dall'IA NowVision. Usalo prima di citare voci, quantità o importi del computo.",
+    "Cerca nel computo metrico del cantiere le voci di una zona, di una categoria di lavorazione, con certe parole nella descrizione o con un codice. Restituisce codice, descrizione, unità, quantità, prezzo, importo, zone, categoria e misurato dall'IA NowVision. Usalo prima di citare voci, quantità o importi del computo.",
     ConsultaComputoInput,
     async (input, { cantiereId }) => {
       const nv = await datiNowVision(cantiereId);
@@ -109,6 +110,7 @@ export const STRUMENTI = {
       let voci = nv.computo.voci;
       if (input.zona) voci = voci.filter(inZona(cantiereId, input.zona, "vociComputo"));
       if (input.codice) voci = voci.filter((v) => v.wbs.toLowerCase().startsWith(input.codice!.toLowerCase()));
+      if (input.categoria) voci = voci.filter((v) => norm(v.categoria ?? "").includes(norm(input.categoria!)));
       if (input.cerca) {
         const parole = norm(input.cerca).split(" ").filter(Boolean);
         voci = voci.filter((v) => parole.every((p) => norm(v.descrizione).includes(p)));
@@ -122,7 +124,8 @@ export const STRUMENTI = {
           quantita: v.quantita === null ? "—" : formatNumero(v.quantita),
           prezzo: v.prezzo === null ? "—" : formatEuro(v.prezzo),
           importo: v.importo === null ? "—" : formatEuro(v.importo),
-          zone: v.zone.join(", "),
+          zone: `${v.zone.join(", ")}${v.zonaDedotta ? " (zona dedotta)" : ""}`,
+          categoria: v.categoria ?? "",
           misurato_ia: v.misuratoIA ? `${formatNumero(v.misuratoIA.quantita)} (${formatNumero(v.misuratoIA.percentuale)}%)` : "—",
         })),
         nota: voci.length > MASSIMO_RIGHE ? `Mostrate le prime ${MASSIMO_RIGHE}: restringi con zona, codice o parole.` : "",

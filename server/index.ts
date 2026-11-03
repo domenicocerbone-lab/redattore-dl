@@ -626,8 +626,24 @@ app.get("/api/cantieri/:cantiere/tabelle", asincrono(async (req, res) => {
   if (!s) return;
   const nv = await datiNowVision(s.id);
   const tabelle: TabelleCantiere = {
-    voci: (nv.computo?.voci ?? []).slice(0, 3000).map((v) => ({ wbs: v.wbs, descrizione: v.descrizione.slice(0, 200), unita: v.unita, quantita: v.quantita, importo: v.importo, zone: v.zone })),
-    attivita: (nv.programma?.attivita ?? []).slice(0, 1000).map((a) => ({ wbs: a.wbs, descrizione: a.descrizione.slice(0, 200), inizio: a.inizioPrevisto, fine: a.finePrevista, zone: a.zone })),
+    voci: (nv.computo?.voci ?? []).slice(0, 3000).map((v) => ({
+      wbs: v.wbs,
+      descrizione: v.descrizione.slice(0, 200),
+      unita: v.unita,
+      quantita: v.quantita,
+      importo: v.importo,
+      zone: v.zone,
+      categoria: v.categoria ?? "",
+      zonaDedotta: v.zonaDedotta === true,
+    })),
+    attivita: (nv.programma?.attivita ?? []).slice(0, 1000).map((a) => ({
+      wbs: a.wbs,
+      descrizione: a.descrizione.slice(0, 200),
+      inizio: a.inizioPrevisto,
+      fine: a.finePrevista,
+      zone: a.zone,
+      zonaDedotta: a.zonaDedotta === true,
+    })),
   };
   res.json(tabelle);
 }));

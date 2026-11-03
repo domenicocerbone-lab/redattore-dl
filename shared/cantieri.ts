@@ -1,6 +1,8 @@
 // Cantieri: i tipi della scheda costruita con l'onboarding dai documenti di progetto
 // e i cantieri di esempio, visibili solo in demo e in sviluppo.
 
+import type { AnomaliaComputo } from "./nowvision";
+
 export interface VoceElencoPrezzi {
   tariffa: string;
   descrizione: string;
@@ -155,12 +157,25 @@ export interface SchedaCantiere extends Cantiere {
   fonti: Record<string, Fonte>;
   /** La proposta delle zone è in corso o è da rifare. */
   zoneInPreparazione?: boolean;
+  /** Anomalie trovate leggendo il computo, tolte quelle che l'utente ha ignorato. */
+  anomalie: AnomaliaComputo[];
+  /** Anomalie ignorate dall'utente, per «wbs|tipo»: non tornano a una nuova lettura. */
+  anomalieIgnorate: string[];
 }
 
 /** Computo e programma in forma leggera, per la revisione delle zone nell'interfaccia. */
 export interface TabelleCantiere {
-  voci: { wbs: string; descrizione: string; unita: string; quantita: number | null; importo: number | null; zone: string[] }[];
-  attivita: { wbs: string; descrizione: string; inizio: string | null; fine: string | null; zone: string[] }[];
+  voci: {
+    wbs: string;
+    descrizione: string;
+    unita: string;
+    quantita: number | null;
+    importo: number | null;
+    zone: string[];
+    categoria: string;
+    zonaDedotta: boolean;
+  }[];
+  attivita: { wbs: string; descrizione: string; inizio: string | null; fine: string | null; zone: string[]; zonaDedotta: boolean }[];
 }
 
 export function eScheda(c: Cantiere): c is SchedaCantiere {

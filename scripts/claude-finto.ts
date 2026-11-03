@@ -899,14 +899,16 @@ function estrazioneFinta(obiettivo: string): unknown {
         riepilogo: "Contratto d'appalto per la nuova costruzione di Residenza Esempio.",
       };
     case "voci": {
-      const voce = (wbs: string, descrizione: string, unita: string, quantita: number, prezzo: number, zona: string, categoria: string) => ({
+      const voce = (wbs: string, descrizione: string, unita: string, quantita: number, prezzo: number, zona: string, categoria: string, importo?: number) => ({
         wbs,
         descrizione,
         unita,
         quantita,
         prezzo,
-        importo: Math.round(quantita * prezzo * 100) / 100,
+        importo: importo ?? Math.round(quantita * prezzo * 100) / 100,
         zona,
+        // Le zone «Piano …» sono ricavate dalla descrizione, come farebbe l'IA senza colonna zona.
+        zona_certezza: zona ? (zona.startsWith("Piano") ? "dedotto" : "letto") : "assente",
         categoria,
       });
       return {
@@ -916,20 +918,21 @@ function estrazioneFinta(obiettivo: string): unknown {
           voce("2.01", "Pilastri e travi in c.a. piano terra", "m³", 96, 310, "Piano terra", "Strutture"),
           voce("2.02", "Solaio in latero-cemento piano primo", "m²", 640, 58, "Piano primo", "Strutture"),
           voce("3.01", "Tamponamento in blocchi di laterizio 30 cm, piano terra", "m²", 520, 64, "Piano terra", "Opere edili"),
-          voce("3.02", "Tamponamento in blocchi di laterizio 30 cm, piano primo", "m²", 540, 64, "Piano primo", "Opere edili"),
+          voce("3.02", "Tamponamento in blocchi di laterizio 30 cm, piano primo", "m²", 540, 64, "Piano primo", "Opere edili", 34000),
           voce("4.01", "Impermeabilizzazione della copertura piana", "m²", 610, 38, "Copertura", "Coperture"),
           voce("5.01", "Allacci alle reti pubbliche", "a corpo", 1, 18500, "", "Impianti"),
         ],
+        anomalie: [{ wbs: "5.01", tipo: "prezzo_anomalo", descrizione: "Voce a corpo senza dettaglio: verifica cosa comprende l'importo." }],
         riepilogo: "Computo metrico estimativo di Residenza Esempio.",
       };
     }
     case "attivita":
       return {
         attivita: [
-          { wbs: "A1", descrizione: "Scavi e fondazioni", zona: "Interrato", inizio_previsto: "2026-03-02", fine_prevista: "2026-05-15" },
-          { wbs: "A2", descrizione: "Strutture in elevazione", zona: "Piano terra", inizio_previsto: "2026-05-18", fine_prevista: "2026-09-30" },
-          { wbs: "A3", descrizione: "Tamponamenti", zona: "Piano primo", inizio_previsto: "2026-10-01", fine_prevista: "2027-01-29" },
-          { wbs: "A4", descrizione: "Copertura", zona: "Copertura", inizio_previsto: "2026-11-02", fine_prevista: "2026-12-18" },
+          { wbs: "A1", descrizione: "Scavi e fondazioni", zona: "Interrato", zona_certezza: "letto", inizio_previsto: "2026-03-02", fine_prevista: "2026-05-15" },
+          { wbs: "A2", descrizione: "Strutture in elevazione", zona: "Piano terra", zona_certezza: "dedotto", inizio_previsto: "2026-05-18", fine_prevista: "2026-09-30" },
+          { wbs: "A3", descrizione: "Tamponamenti", zona: "Piano primo", zona_certezza: "dedotto", inizio_previsto: "2026-10-01", fine_prevista: "2027-01-29" },
+          { wbs: "A4", descrizione: "Copertura", zona: "Copertura", zona_certezza: "letto", inizio_previsto: "2026-11-02", fine_prevista: "2026-12-18" },
         ],
         riepilogo: "Cronoprogramma dei lavori.",
       };

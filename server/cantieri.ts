@@ -55,6 +55,8 @@ function nuovaScheda(base: Partial<Cantiere> & { id: string; nome: string }, cre
     decisioni: [],
     documenti: [],
     fonti: {},
+    anomalie: [],
+    anomalieIgnorate: [],
   };
 }
 
@@ -63,7 +65,11 @@ export async function caricaCantieri() {
   for (const id of await fs.readdir(CARTELLA)) {
     if (!ID_CANTIERE.test(id)) continue;
     const s = await leggiJson<SchedaCantiere | null>(fileScheda(id), null);
-    if (s?.scheda) schede.set(id, s);
+    if (!s?.scheda) continue;
+    // Schede salvate prima delle anomalie del computo.
+    s.anomalie ??= [];
+    s.anomalieIgnorate ??= [];
+    schede.set(id, s);
   }
   await convertiIncanto();
 }
@@ -198,6 +204,16 @@ const Modifiche = z
       .array(z.object({ categoria: testo(80), descrizione: testo(300), fonte: FonteZ.optional() }))
       .max(120),
     fonti: z.record(z.string(), FonteZ),
+    anomalie: z
+      .array(
+        z.object({
+          wbs: z.string().max(40),
+          tipo: z.enum(["importo_non_torna", "quantita_anomala", "prezzo_anomalo", "duplicata", "altro"]),
+          descrizione: testo(300),
+        }),
+      )
+      .max(2000),
+    anomalieIgnorate: z.array(z.string().max(80)).max(4000),
     zone: z
       .array(
         z.object({

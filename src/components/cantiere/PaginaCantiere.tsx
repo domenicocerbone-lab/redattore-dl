@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { impostaCantiere, ricaricaCantiere, useCantiere } from "../../lib/cantieri";
 import { caricaSessione } from "../../lib/sessione";
 import { Icona } from "../Icone";
+import { SezioneComputo } from "./SezioneComputo";
 import { SezioneDati } from "./SezioneDati";
 import { SezioneDocumenti } from "./SezioneDocumenti";
 import { SezioneZone } from "./SezioneZone";
@@ -183,7 +184,12 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
               Nuovo report su questo cantiere →
             </button>
           </div>
-          {scheda === "dati" && <SezioneDati s={s} />}
+          {scheda === "dati" && (
+            <>
+              <SezioneDati s={s} />
+              <SezioneComputo s={s} />
+            </>
+          )}
           {scheda === "zone" && <SezioneZone s={s} />}
           {scheda === "documenti" && <SezioneDocumenti s={s} />}
         </div>
@@ -232,6 +238,7 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
         {attuale === "revisione" && (
           <>
             <SezioneDati s={s} />
+            <SezioneComputo s={s} />
             <SezioneZone s={s} />
             <div className="cantiere__avanti">
               <button type="button" className="btn btn--piccolo" onClick={() => setPasso("documenti")}>
@@ -273,6 +280,16 @@ function Conferma({ s, onConfermata, onIndietro }: { s: SchedaCantiere; onConfer
     { ok: s.contratto.importo !== null, testo: s.contratto.importo !== null ? `Importo contrattuale ${formatEuro(s.contratto.importo)}` : "Importo contrattuale" },
     { ok: Boolean(s.date.consegnaLavori || s.date.ultimazionePrevista), testo: "Date contrattuali" },
     { ok: (tabelle?.voci.length ?? 0) > 0, testo: tabelle?.voci.length ? `Computo: ${tabelle.voci.length} voci${totale ? `, ${formatEuro(totale)}` : ""}` : "Computo metrico" },
+    ...((tabelle?.voci.length ?? 0) > 0
+      ? [
+          {
+            ok: s.anomalie.length === 0,
+            testo: s.anomalie.length
+              ? `${s.anomalie.length === 1 ? "1 anomalia" : `${s.anomalie.length} anomalie`} del computo da controllare`
+              : "Nessuna anomalia aperta nel computo",
+          },
+        ]
+      : []),
     { ok: (tabelle?.attivita.length ?? 0) > 0, testo: tabelle?.attivita.length ? `Programma: ${tabelle.attivita.length} attività` : "Cronoprogramma" },
     {
       ok: s.zone.length > 0,

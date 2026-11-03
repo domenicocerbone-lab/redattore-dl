@@ -20,13 +20,14 @@ import {
   type TipoDocumentoProgetto,
   type Zona,
 } from "../shared/cantieri";
-import type { AttivitaProgramma, VoceComputo } from "../shared/nowvision";
+import type { AnomaliaComputo, AttivitaProgramma, VoceComputo } from "../shared/nowvision";
 import { formatEuro } from "../shared/numeri";
 import { scriviAtomico } from "./archivio-json";
 import { cartellaCantiere, salvaScheda, scheda, tutteLeSchede } from "./cantieri";
 import { estraiStrutturato, MODELLO_DOCUMENTI, MODELLO_TABELLE } from "./estrazione";
 import { datiNowVision, leggiComputo, leggiProgramma, rimuoviEstratti, salvaEstratti } from "./nowvision";
 import { messaggioErrore } from "./redattore";
+import { controllaConti, normWbs, riattaccaAttivita, riattaccaColonne, uniscAnomalie } from "./tabelle";
 import { consumoVuoto, registra, type Consumo } from "./utilizzo";
 
 const PARALLELI = 2;
@@ -339,6 +340,10 @@ const Generale = z.object({
   riepilogo: z.string().describe("Una frase su cosa contiene il documento."),
 });
 
+const CertezzaZona = z
+  .enum(["letto", "dedotto", "assente"])
+  .describe("letto se la zona è in una colonna o in un titolo; dedotto se la ricavi dalla descrizione; assente se non si capisce.");
+
 const Voci = z.object({
   voci: z.array(
     z.object({
@@ -348,10 +353,24 @@ const Voci = z.object({
       quantita: z.number().nullable(),
       prezzo: z.number().nullable(),
       importo: z.number().nullable(),
-      zona: z.string().describe("Zona, piano, ambiente o corpo indicato per la voce; vuoto se non indicato."),
-      categoria: z.string(),
+      zona: z
+        .string()
+        .describe("Zona, piano, unità o corpo: dalla colonna o dal titolo se c'è, altrimenti ricavata dalla descrizione («piano terra», «alloggio A-03», «corpo scala B»); vuoto se non si capisce."),
+      zona_certezza: CertezzaZona,
+      categoria: z
+        .string()
+        .describe("Categoria di lavorazione: dal titolo di capitolo se c'è, altrimenti dedotta dalla descrizione (es. «Scavi e fondazioni», «Strutture», «Murature», «Impianti elettrici», «Finiture»)."),
     }),
   ),
+  anomalie: z
+    .array(
+      z.object({
+        wbs: z.string(),
+        tipo: z.enum(["quantita_anomala", "prezzo_anomalo", "duplicata", "altro"]),
+        descrizione: z.string().describe("Una frase: cosa non torna e perché."),
+      }),
+    )
+    .describe("Solo anomalie evidenti: prezzo strano per l'unità di misura o per la lavorazione, quantità incoerente con la descrizione, voce ripetuta. Non segnalare i conti quantità × prezzo: li controllo io."),
   riepilogo: z.string(),
 });
 
@@ -360,7 +379,10 @@ const Attivita = z.object({
     z.object({
       wbs: z.string().describe("Codice o numero dell'attività; se manca, il numero d'ordine."),
       descrizione: z.string(),
-      zona: z.string(),
+      zona: z
+        .string()
+        .describe("Zona, piano o corpo: dalla colonna se c'è, altrimenti ricavata dalla descrizione; vuoto se non si capisce."),
+      zona_certezza: CertezzaZona,
       inizio_previsto: z.string().describe("AAAA-MM-GG o vuoto."),
       fine_prevista: z.string().describe("AAAA-MM-GG o vuoto."),
     }),
@@ -553,103 +575,128 @@ async function leggiTabella<T>(
   return risultati;
 }
 
+/** L'export NowVision letto con il parser delle colonne: serve a riattaccare le colonne della piattaforma. */
+async function seNowVision<T>(d: DocumentoProgetto, leggi: () => Promise<T>): Promise<T | null> {
+  if (!d.file.endsWith(".xlsx")) return null;
+  try {
+    return await leggi();
+  } catch {
+    return null;
+  }
+}
+
+const plurale = (n: number, uno: string, molti: string) => `${n} ${n === 1 ? uno : molti}`;
+
 async function leggiComputoProgetto(s: SchedaCantiere, d: DocumentoProgetto, consumo: Consumo): Promise<string> {
-  let voci: VoceComputo[] | null = null;
-  let formato = "";
-  if (d.file.endsWith(".xlsx")) {
-    try {
-      voci = await leggiComputo(fileDocumento(s, d));
-      formato = " (formato NowVision, letto senza IA)";
-    } catch (e) {
-      if (!(e instanceof Error && e.message.startsWith("Non trovo"))) throw new Error("Il file xlsx non si apre: esportalo di nuovo e ricaricalo.");
-    }
-  }
-  if (!voci) {
-    const blocchi = await leggiTabella(
-      s,
-      d,
-      consumo,
-      "voci",
-      Voci,
-      "Estrai tutte le voci del computo metrico in quest'estratto, una per riga, senza saltarne. Righe di titolo o di capitolo senza quantità: usale solo come «categoria» delle voci che seguono.",
-    );
-    const viste = new Set<string>();
-    voci = blocchi.flatMap((b) => b.voci).flatMap((v, i) => {
-      const wbs = v.wbs.trim() || `V.${i + 1}`;
-      const chiave = `${wbs}|${normalizza(v.descrizione)}`;
-      if (viste.has(chiave) || !v.descrizione.trim()) return [];
-      viste.add(chiave);
-      return [
-        {
-          wbs,
-          descrizione: v.descrizione.trim(),
-          unita: v.unita.trim(),
-          quantita: v.quantita,
-          prezzo: v.prezzo,
-          importo: v.importo,
-          zone: v.zona.trim() ? [v.zona.trim()] : [],
-          misuratoIA: null,
-          costoRilevato: null,
-          affidabilitaIA: null,
-        },
-      ];
-    });
-  }
+  // Sempre l'IA: interpreta il computo, ricava zone e categorie e segnala le anomalie.
+  const blocchi = await leggiTabella(
+    s,
+    d,
+    consumo,
+    "voci",
+    Voci,
+    "Leggi il computo metrico di quest'estratto e restituisci tutte le voci, una per riga, senza saltarne. Righe di titolo o di capitolo senza quantità non sono voci: usale come «categoria» delle voci che seguono. Se manca una colonna di zona, ricava la zona dalla descrizione («piano terra», «alloggio A-03», «corpo scala B») e segnala che è dedotta; se non si capisce lasciala vuota. Segnala solo le anomalie evidenti.",
+  );
+  const viste = new Set<string>();
+  const vociIA = blocchi.flatMap((b) => b.voci).flatMap((v, i): VoceComputo[] => {
+    const wbs = v.wbs.trim() || `V.${i + 1}`;
+    const chiave = `${normWbs(wbs)}|${normalizza(v.descrizione)}`;
+    if (viste.has(chiave) || !v.descrizione.trim()) return [];
+    viste.add(chiave);
+    const zona = v.zona_certezza === "assente" ? "" : v.zona.trim();
+    return [
+      {
+        wbs,
+        descrizione: v.descrizione.trim(),
+        unita: v.unita.trim(),
+        quantita: v.quantita,
+        prezzo: v.prezzo,
+        importo: v.importo,
+        zone: zona ? [zona] : [],
+        misuratoIA: null,
+        costoRilevato: null,
+        affidabilitaIA: null,
+        categoria: v.categoria.trim(),
+        zonaDedotta: Boolean(zona) && v.zona_certezza === "dedotto",
+      },
+    ];
+  });
+  const dalFile = await seNowVision(d, () => leggiComputo(fileDocumento(s, d)));
+  const { voci, recuperate } = dalFile ? riattaccaColonne(vociIA, dalFile) : { voci: vociIA, recuperate: 0 };
   if (voci.length === 0) throw new Error("Il documento non sembra un computo: non ho trovato voci.");
-  await scriviAtomico(fileEstratti(s, d), JSON.stringify({ voci }));
+
+  const codici = new Set(voci.map((v) => v.wbs));
+  const anomalie = uniscAnomalie(
+    [blocchi.flatMap((b) => b.anomalie).filter((a) => codici.has(a.wbs) && a.descrizione.trim()), controllaConti(voci)],
+    [],
+  );
+  await scriviAtomico(fileEstratti(s, d), JSON.stringify({ voci, anomalie }));
   await sostituisciVecchio(s, d);
   await ricomponi(s, "computo");
+
   const totale = voci.reduce((t, v) => t + (v.importo ?? 0), 0);
-  const zone = new Set(voci.flatMap((v) => v.zone)).size;
-  return `${voci.length} voci${totale ? `, ${formatEuro(totale)}` : ""}${zone ? `, ${zone} zone indicate` : ""}${formato}`;
+  const categorie = new Set(voci.map((v) => v.categoria).filter(Boolean)).size;
+  const dedotte = voci.filter((v) => v.zonaDedotta).length;
+  return [
+    plurale(voci.length, "voce", "voci"),
+    totale ? formatEuro(totale) : "",
+    categorie ? plurale(categorie, "categoria", "categorie") : "",
+    dedotte ? `zona dedotta per ${plurale(dedotte, "voce", "voci")}` : "",
+    anomalie.length ? `${plurale(anomalie.length, "anomalia", "anomalie")} da controllare` : "nessuna anomalia",
+    recuperate ? `${plurale(recuperate, "voce recuperata", "voci recuperate")} dal file` : "",
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .concat(dalFile ? " (export NowVision: colonne della piattaforma riattaccate)" : "");
 }
 
 async function leggiProgrammaProgetto(s: SchedaCantiere, d: DocumentoProgetto, consumo: Consumo): Promise<string> {
-  let dati: { attivita: AttivitaProgramma[]; note: string[] } | null = null;
-  let formato = "";
-  if (d.file.endsWith(".xlsx")) {
-    try {
-      dati = await leggiProgramma(fileDocumento(s, d));
-      formato = " (formato NowVision, letto senza IA)";
-    } catch (e) {
-      if (!(e instanceof Error && e.message.startsWith("Non trovo"))) throw new Error("Il file xlsx non si apre: esportalo di nuovo e ricaricalo.");
-    }
-  }
-  if (!dati) {
-    const blocchi = await leggiTabella(
-      s,
-      d,
-      consumo,
-      "attivita",
-      Attivita,
-      "Estrai tutte le attività del cronoprogramma in quest'estratto con date previste di inizio e fine. Righe di gruppo senza date: usale come prefisso nella descrizione delle attività che contengono.",
-    );
-    const iso = (t: string) => (/^\d{4}-\d{2}-\d{2}$/.test(t.trim()) ? t.trim() : null);
-    dati = {
-      attivita: blocchi
-        .flatMap((b) => b.attivita)
-        .filter((a) => a.descrizione.trim())
-        .map((a, i) => ({
-          wbs: a.wbs.trim() || `A.${i + 1}`,
-          descrizione: a.descrizione.trim(),
-          zone: a.zona.trim() ? [a.zona.trim()] : [],
-          inizioPrevisto: iso(a.inizio_previsto),
-          finePrevista: iso(a.fine_prevista),
-          inizioEffettivo: null,
-          fineEffettiva: null,
-          avanzamento: null,
-          note: "",
-        })),
-      note: [],
-    };
-  }
-  if (dati.attivita.length === 0) throw new Error("Il documento non sembra un cronoprogramma: non ho trovato attività.");
+  const blocchi = await leggiTabella(
+    s,
+    d,
+    consumo,
+    "attivita",
+    Attivita,
+    "Leggi il cronoprogramma di quest'estratto e restituisci tutte le attività con date previste di inizio e fine. Righe di gruppo senza date: usale come prefisso nella descrizione delle attività che contengono. Se manca una colonna di zona, ricava la zona dalla descrizione e segnala che è dedotta.",
+  );
+  const iso = (t: string) => (/^\d{4}-\d{2}-\d{2}$/.test(t.trim()) ? t.trim() : null);
+  const attivitaIA = blocchi
+    .flatMap((b) => b.attivita)
+    .filter((a) => a.descrizione.trim())
+    .map((a, i): AttivitaProgramma => {
+      const zona = a.zona_certezza === "assente" ? "" : a.zona.trim();
+      return {
+        wbs: a.wbs.trim() || `A.${i + 1}`,
+        descrizione: a.descrizione.trim(),
+        zone: zona ? [zona] : [],
+        inizioPrevisto: iso(a.inizio_previsto),
+        finePrevista: iso(a.fine_prevista),
+        inizioEffettivo: null,
+        fineEffettiva: null,
+        avanzamento: null,
+        note: "",
+        zonaDedotta: Boolean(zona) && a.zona_certezza === "dedotto",
+      };
+    });
+  const dalFile = await seNowVision(d, () => leggiProgramma(fileDocumento(s, d)));
+  const { attivita, recuperate } = dalFile ? riattaccaAttivita(attivitaIA, dalFile.attivita) : { attivita: attivitaIA, recuperate: 0 };
+  if (attivita.length === 0) throw new Error("Il documento non sembra un cronoprogramma: non ho trovato attività.");
+  const dati = { attivita, note: dalFile?.note ?? [] };
   await scriviAtomico(fileEstratti(s, d), JSON.stringify(dati));
   await sostituisciVecchio(s, d);
   await ricomponi(s, "cronoprogramma");
-  const date = dati.attivita.flatMap((a) => [a.inizioPrevisto, a.finePrevista]).filter((x): x is string => Boolean(x)).sort();
-  const dataIt = (iso: string) => iso.split("-").reverse().join("/");
-  return `${dati.attivita.length} attività${date.length ? `, dal ${dataIt(date[0])} al ${dataIt(date.at(-1)!)}` : ""}${formato}`;
+  const date = attivita.flatMap((a) => [a.inizioPrevisto, a.finePrevista]).filter((x): x is string => Boolean(x)).sort();
+  const dataIt = (x: string) => x.split("-").reverse().join("/");
+  const dedotte = attivita.filter((a) => a.zonaDedotta).length;
+  return [
+    plurale(attivita.length, "attività", "attività"),
+    date.length ? `dal ${dataIt(date[0])} al ${dataIt(date.at(-1)!)}` : "",
+    dedotte ? `zona dedotta per ${plurale(dedotte, "attività", "attività")}` : "",
+    recuperate ? `${plurale(recuperate, "attività recuperata", "attività recuperate")} dal file` : "",
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .concat(dalFile ? " (export NowVision: date effettive e avanzamento riattaccati)" : "");
 }
 
 async function leggiPlanimetria(s: SchedaCantiere, d: DocumentoProgetto, consumo: Consumo): Promise<string> {
@@ -694,7 +741,12 @@ async function sostituisciVecchio(s: SchedaCantiere, d: DocumentoProgetto) {
   await fs.rm(fileEstratti(s, vecchio), { force: true });
 }
 
-type Estratti = { voci?: VoceComputo[]; attivita?: AttivitaProgramma[]; ambienti?: { nome: string; piano: string }[] };
+type Estratti = {
+  voci?: VoceComputo[];
+  anomalie?: AnomaliaComputo[];
+  attivita?: AttivitaProgramma[];
+  ambienti?: { nome: string; piano: string }[];
+};
 
 async function leggiEstratti(s: SchedaCantiere, d: DocumentoProgetto): Promise<Estratti> {
   try {
@@ -748,6 +800,7 @@ async function ricomponi(s: SchedaCantiere, tipo: "computo" | "cronoprogramma") 
     const voci = estratti.flatMap((e) => e.voci ?? []);
     if (voci.length) await salvaEstratti(s.id, "computo", nome, voci);
     else await rimuoviEstratti(s.id, "computo");
+    s.anomalie = uniscAnomalie(estratti.map((e) => e.anomalie ?? []), s.anomalieIgnorate);
   } else {
     const attivita = estratti.flatMap((e) => e.attivita ?? []);
     if (attivita.length) await salvaEstratti(s.id, "cronoprogramma", nome, { attivita, note: [] });
@@ -789,7 +842,7 @@ export async function proponiZone(s: SchedaCantiere, personaId: string) {
       `[estrazione:zone] Cantiere «${s.nome}»${s.lavori ? `: ${s.lavori}` : ""}.`,
       "Proponi le zone in cui seguire l'avanzamento dei lavori e i sopralluoghi. Una zona è un'unità, un piano, un corpo scala, una facciata, l'esterno o una parte d'opera come le strutture: deve servire a ritrovare le voci di computo e le attività del programma che la riguardano. Ogni voce e attività va in al massimo una zona; quelle che non riesci ad assegnare vanno in voci_senza_zona. Nelle decisioni metti le scelte che spettano all'utente (es. seguire le unità una per una o per piano), al massimo tre, con due o tre opzioni ciascuna.",
       nv.zone.length ? `Zone già indicate nei file del cantiere (usa questi nomi): ${nv.zone.join(", ")}.` : "",
-      voci.length ? `\n## Voci di computo (wbs | descrizione | zona indicata)\n${voci.slice(0, 900).map((v) => `${v.wbs} | ${taglia(v.descrizione, 90)} | ${v.zone.join(", ")}`).join("\n")}` : "",
+      voci.length ? `\n## Voci di computo (wbs | descrizione | zona indicata)\n${voci.slice(0, 900).map((v) => `${v.wbs} | ${taglia(v.descrizione, 90)} | ${v.zone.join(", ")}${v.zonaDedotta ? " (dedotta)" : ""}`).join("\n")}` : "",
       attivita.length ? `\n## Attività del cronoprogramma (wbs | descrizione | zona | inizio | fine)\n${attivita.slice(0, 300).map((a) => `${a.wbs} | ${taglia(a.descrizione, 90)} | ${a.zone.join(", ")} | ${a.inizioPrevisto ?? ""} | ${a.finePrevista ?? ""}`).join("\n")}` : "",
       ambienti.length ? `\n## Ambienti dalle planimetrie (nome | piano | tipo)\n${ambienti.slice(0, 300).map((a) => `${a.nome} | ${a.piano} | ${a.tipo}`).join("\n")}` : "",
       s.lavorazioni.length ? `\n## Lavorazioni previste dal contratto\n${s.lavorazioni.slice(0, 60).map((l) => `- ${l.categoria}: ${l.descrizione}`).join("\n")}` : "",

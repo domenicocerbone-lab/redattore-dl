@@ -13,6 +13,17 @@ export interface VoceComputo {
   misuratoIA: { quantita: number; percentuale: number } | null;
   costoRilevato: number | null;
   affidabilitaIA: string | null;
+  /** Categoria di lavorazione, letta dal capitolo o dedotta dall'IA. */
+  categoria?: string;
+  /** La zona non è scritta nel computo: l'IA l'ha ricavata dalla descrizione. */
+  zonaDedotta?: boolean;
+}
+
+/** Anomalia trovata leggendo il computo: conti che non tornano dal codice, il resto dall'IA. */
+export interface AnomaliaComputo {
+  wbs: string;
+  tipo: "importo_non_torna" | "quantita_anomala" | "prezzo_anomalo" | "duplicata" | "altro";
+  descrizione: string;
 }
 
 export interface AttivitaProgramma {
@@ -27,6 +38,8 @@ export interface AttivitaProgramma {
   /** Da 0 a 1, come nella colonna «% Progress». */
   avanzamento: number | null;
   note: string;
+  /** La zona non è scritta nel programma: l'IA l'ha ricavata dalla descrizione. */
+  zonaDedotta?: boolean;
 }
 
 export interface FileCaricato {

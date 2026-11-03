@@ -193,6 +193,8 @@ export function contestoMessaggio(adesso: Date, modalita: string | undefined): s
   const parti = [`Oggi è ${giorno} ${data}, ore ${ora}.`];
   if (modalita === "foto") {
     parti.push("Il DL ha scelto «Bozze dalle foto»: proponi tu quali documenti preparare.");
+  } else if (modalita === "revisione_cantiere") {
+    parti.push("L'utente ha aperto la revisione della scheda del cantiere.");
   } else if (modalita) {
     const tipo = TIPI_DOCUMENTO.find((t) => t.id === modalita);
     if (tipo) parti.push(`Documento scelto dal DL: ${tipo.nome}.`);

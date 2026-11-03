@@ -6,7 +6,7 @@ import path from "node:path";
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { DatiPersona, EventoInterfaccia, Persona, Sessione } from "../shared/accessi";
 import type { EventoTurno, FotoCaricata, NuovaConversazione, NuovoMessaggio, Salute } from "../shared/api";
-import { MODALITA_FOTO, tipoDocumento } from "../shared/documenti";
+import { MODALITA_FOTO, MODALITA_REVISIONE, tipoDocumento } from "../shared/documenti";
 import { chiaveVersione, type FirmaApposta, type ModificaManuale } from "../shared/schema";
 import { trovaVersione, type VoceArchivio } from "../shared/versioni";
 import {
@@ -54,9 +54,11 @@ import {
   creaCantiere,
   elencoBreve,
   esisteCantiere,
+  salvaScheda,
   scheda,
   trovaCantiere,
 } from "./cantieri";
+import { attendiLetture, promptRevisione } from "./revisione";
 import { aggiungiDocumento, eliminaDocumento, fileDocumento, proponiZone, riprendiLetture, rileggi } from "./onboarding";
 import { caricaFirme, eliminaFirma, fileFirma, firmaComeDataUrl, firmaDi, salvaFirma, type DatiFirma } from "./firme";
 import { impronteScheda, promptDiSistema } from "./istruzioni";
@@ -67,6 +69,7 @@ import {
   aggiungiMessaggioUtente,
   chiaveConfigurata,
   eseguiTurno,
+  schedaPerRigenera,
   tornaAllUltimoMessaggio,
 } from "./redattore";
 import {
@@ -173,6 +176,7 @@ app.get("/api/conversazioni", asincrono(async (req, res) => {
 app.post("/api/conversazioni", asincrono(async (req, res) => {
   const { modalita, cantiereId } = req.body as NuovaConversazione;
   const p = personaDella(res);
+  if (modalita === MODALITA_REVISIONE.id) return res.status(400).json({ errore: "La revisione si apre dalla scheda del cantiere." });
   if (!puoUsareCantiere(p, cantiereId)) return res.status(403).json({ errore: "Non hai accesso a questo cantiere." });
   const c = trovaCantiere(cantiereId);
   if (!c) return res.status(404).json({ errore: "Cantiere non trovato." });
@@ -200,12 +204,16 @@ const inCorso = new Set<string>();
 async function streamTurno(
   req: Request,
   res: Response,
-  prepara: (conv: ConversazioneSalvata, emetti: (e: EventoTurno) => void) => Promise<boolean>,
+  prepara: (conv: ConversazioneSalvata, emetti: (e: EventoTurno) => void, segnale: AbortSignal) => Promise<boolean>,
 ) {
   const conv = await leggiSua(req, res);
   if (!conv) return;
   const p = personaDella(res);
   if (inCorso.has(conv.id)) return res.status(409).json({ errore: "Il Redattore sta già rispondendo" });
+  // La revisione modifica la scheda: serve ancora l'accesso al cantiere.
+  if (conv.modalita === MODALITA_REVISIONE.id && !puoUsareCantiere(p, conv.cantiereId)) {
+    return res.status(403).json({ errore: "Non hai più accesso a questo cantiere." });
+  }
   if (p.limiteGiornaliero !== null && messaggiOggi(p.id) >= p.limiteGiornaliero) {
     return res.status(429).json({
       errore: `Hai usato i ${p.limiteGiornaliero} messaggi di oggi. Il Redattore torna disponibile domani.`,
@@ -233,7 +241,7 @@ async function streamTurno(
   const base = { persona: p.id, conversazione: conv.id, cantiere: conv.cantiereId };
 
   try {
-    if (!(await prepara(conv, emetti))) {
+    if (!(await prepara(conv, emetti, interruzione.signal))) {
       emetti({ tipo: "errore", messaggio: "Niente da rigenerare." });
       return;
     }
@@ -274,8 +282,13 @@ async function streamTurno(
 app.post(
   "/api/conversazioni/:id/messaggi",
   asincrono((req, res) =>
-    streamTurno(req, res, async (conv, emetti) => {
+    streamTurno(req, res, async (conv, emetti, segnale) => {
       const input = req.body as NuovoMessaggio;
+      if (input.documenti?.length) {
+        // Documenti di progetto allegati in revisione: il Redattore risponde dopo averli letti.
+        emetti({ tipo: "stato", stato: "legge" });
+        await attendiLetture(conv.cantiereId, input.documenti, segnale);
+      }
       const messaggio = await aggiungiMessaggioUtente(conv, input);
       emetti({ tipo: "utente", messaggio });
       void registra({
@@ -297,6 +310,7 @@ app.post(
   asincrono((req, res) =>
     streamTurno(req, res, async (conv) => {
       const fatto = tornaAllUltimoMessaggio(conv);
+      if (fatto) await schedaPerRigenera(conv);
       if (fatto) void registra({ persona: personaDella(res).id, tipo: "rigenera", conversazione: conv.id, cantiere: conv.cantiereId });
       return fatto;
     }),
@@ -646,6 +660,32 @@ app.get("/api/cantieri/:cantiere/tabelle", asincrono(async (req, res) => {
     })),
   };
   res.json(tabelle);
+}));
+
+/**
+ * Conversazione di revisione della scheda con il Redattore: una per persona e cantiere,
+ * riaperta se esiste già. `nuova` dice all'interfaccia di avviarla con il primo messaggio.
+ */
+app.post("/api/cantieri/:cantiere/revisione", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  const p = personaDella(res);
+  const esistente = s.revisioni?.[p.id] ? await leggi(s.revisioni[p.id]) : null;
+  if (esistente && proprietario(esistente) === p.id) {
+    return res.json({ conversazione: perInterfaccia(esistente), nuova: esistente.messaggi.length === 0 });
+  }
+  const conv = nuovaConversazione({
+    titolo: `Revisione scheda · ${s.breve}`,
+    modalita: MODALITA_REVISIONE.id,
+    cantiereId: s.id,
+    sistema: promptRevisione(p),
+    personaId: p.id,
+  });
+  await salva(conv);
+  s.revisioni = { ...s.revisioni, [p.id]: conv.id };
+  await salvaScheda(s);
+  void registra({ persona: p.id, tipo: "conversazione", conversazione: conv.id, cantiere: s.id, modalita: MODALITA_REVISIONE.id });
+  res.json({ conversazione: perInterfaccia(conv), nuova: true });
 }));
 
 app.post("/api/cantieri/:cantiere/zone/proponi", (req, res) => {

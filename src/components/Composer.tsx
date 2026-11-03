@@ -2,10 +2,12 @@
 // «grande» è quello della home, «compatto» quello in fondo alla chat.
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { NOMI_DOCUMENTO_PROGETTO, TIPI_DOCUMENTO_PROGETTO, type TipoDocumentoProgetto } from "../../shared/cantieri";
 import { MODALITA_FOTO, TIPI_DOCUMENTO, nomeModalita, tipoDocumento } from "../../shared/documenti";
 import type { Ripresa } from "../../shared/nowvision";
 import type { FotoAllegata } from "../../shared/schema";
-import { api } from "../lib/api";
+import { api, caricaDocumentoProgetto } from "../lib/api";
+import { impostaCantiere } from "../lib/cantieri";
 import { durata, useDettatura } from "../lib/dettatura";
 import { preparaFoto } from "../lib/immagini";
 import type { Invio } from "../lib/stato";
@@ -19,6 +21,26 @@ interface FotoInCaricamento {
   nome: string;
   stato: "carica" | "pronta" | "errore";
   caricata?: FotoAllegata;
+}
+
+interface DocumentoInCaricamento {
+  chiave: string;
+  file: File;
+  tipo: TipoDocumentoProgetto;
+  stato: "pronto" | "carica" | "errore";
+  avanzamento: number;
+}
+
+/** Tipo di documento di progetto dal nome del file: si può cambiare prima dell'invio. */
+function tipoDalNome(file: File): TipoDocumentoProgetto {
+  const n = file.name.toLowerCase();
+  if (/crono|programma|gantt/.test(n)) return "cronoprogramma";
+  if (/computo|cme|boq|stima/.test(n)) return "computo";
+  if (/pianta|piante|planimetr|tavol|layout/.test(n) || file.type.startsWith("image/")) return "planimetria";
+  if (/psc|sicurezza|notifica/.test(n)) return "psc";
+  if (/contratt|capitolato|appalto/.test(n)) return "contratto";
+  if (/\.(xlsx|csv)$/.test(n)) return "computo";
+  return "altro";
 }
 
 export interface ComposerHandle {
@@ -40,20 +62,24 @@ interface Props {
   onInterrompi?: () => void;
   /** Se il cantiere ha dati NowVision, apre la scelta delle riprese. */
   onApriRiprese?: () => void;
+  /** Revisione della scheda: la graffetta allega documenti di progetto di questo cantiere invece delle foto. */
+  cantiereDocumenti?: string;
 }
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { variante, modalita, onModalita, segnaposto, inCorso, disabilitato, onInvia, onInterrompi, onApriRiprese },
+  { variante, modalita, onModalita, segnaposto, inCorso, disabilitato, onInvia, onInterrompi, onApriRiprese, cantiereDocumenti },
   ref,
 ) {
   const [testo, setTesto] = useState("");
   const [provvisorio, setProvvisorio] = useState("");
   const [foto, setFoto] = useState<FotoInCaricamento[]>([]);
   const [riprese, setRiprese] = useState<Ripresa[]>([]);
+  const [documenti, setDocumenti] = useState<DocumentoInCaricamento[]>([]);
   const [errore, setErrore] = useState<string | null>(null);
   const [secondiDettati, setSecondiDettati] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
   const selettore = useRef<HTMLInputElement>(null);
+  const selettoreDocumenti = useRef<HTMLInputElement>(null);
 
   const dettatura = useDettatura((definitivo, prov) => {
     if (definitivo) setTesto((t) => (t && !t.endsWith(" ") ? `${t} ` : t) + definitivo.trim());
@@ -111,14 +137,49 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   }
 
   const fotoPronte = foto.filter((f) => f.stato === "pronta");
-  const caricamento = foto.some((f) => f.stato === "carica");
+  const caricamento = foto.some((f) => f.stato === "carica") || documenti.some((d) => d.stato === "carica");
   const contenuto = (testo + provvisorio).trim();
   const puoInviare =
-    !inCorso && !disabilitato && !caricamento && (contenuto.length > 0 || fotoPronte.length > 0 || riprese.length > 0);
+    !inCorso &&
+    !disabilitato &&
+    !caricamento &&
+    (contenuto.length > 0 || fotoPronte.length > 0 || riprese.length > 0 || documenti.length > 0);
 
-  function invia() {
+  function aggiungiDocumenti(files: FileList | null) {
+    if (!files?.length) return;
+    setErrore(null);
+    const nuovi = [...files].map((file) => ({ chiave: crypto.randomUUID(), file, tipo: tipoDalNome(file), stato: "pronto" as const, avanzamento: 0 }));
+    setDocumenti((d) => [...d, ...nuovi].slice(0, 6));
+  }
+
+  /** I documenti si caricano all'invio, con il tipo scelto: il messaggio parte quando sono sul server. */
+  async function caricaDocumenti(): Promise<{ id: string; nome: string; tipo: string }[] | null> {
+    if (!cantiereDocumenti || documenti.length === 0) return [];
+    const caricati: { id: string; nome: string; tipo: string }[] = [];
+    for (const d of documenti) {
+      const aggiorna = (x: Partial<DocumentoInCaricamento>) => setDocumenti((ds) => ds.map((y) => (y.chiave === d.chiave ? { ...y, ...x } : y)));
+      aggiorna({ stato: "carica", avanzamento: 0 });
+      try {
+        const s = await caricaDocumentoProgetto(cantiereDocumenti, d.tipo, d.file, d.file.name, (f) => aggiorna({ avanzamento: f }));
+        impostaCantiere(s);
+        // L'ultimo documento di quel tipo caricato è questo: i caricamenti vanno uno alla volta.
+        const nuovo = s.documenti.filter((x) => x.tipo === d.tipo).sort((a, b) => b.caricatoIl.localeCompare(a.caricatoIl))[0];
+        if (nuovo) caricati.push({ id: nuovo.id, nome: nuovo.nome, tipo: NOMI_DOCUMENTO_PROGETTO[nuovo.tipo] });
+        setDocumenti((ds) => ds.filter((y) => y.chiave !== d.chiave));
+      } catch (e) {
+        aggiorna({ stato: "errore" });
+        setErrore(`${d.file.name}: ${(e as Error).message}`);
+        return null;
+      }
+    }
+    return caricati;
+  }
+
+  async function invia() {
     if (!puoInviare) return;
     if (dettatura.attiva) dettatura.ferma();
+    const allegati = await caricaDocumenti();
+    if (allegati === null) return;
     const anteprimeFoto = fotoPronte.map((f, i) => ({ ...f.caricata!, etichetta: `F${i + 1}` }));
     const anteprimeRiprese: FotoAllegata[] = riprese.map((r, i) => ({
       id: r.id,
@@ -133,6 +194,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       foto: anteprimeFoto.map((f) => f.id),
       ...(riprese.length ? { riprese: riprese.map((r) => r.id) } : {}),
       anteprime: [...anteprimeFoto, ...anteprimeRiprese],
+      ...(allegati.length ? { documenti: allegati.map((a) => a.id), allegati } : {}),
       ...(secondiDettati > 0 ? { dettato: { secondi: secondiDettati } } : {}),
     });
     setTesto("");
@@ -251,7 +313,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
       onKeyDown={(e) => {
         if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
           e.preventDefault();
-          invia();
+          void invia();
         }
       }}
     />
@@ -259,7 +321,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    invia();
+    void invia();
   };
 
   if (variante === "grande") {
@@ -348,22 +410,89 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     );
   }
 
-  const vuoto = !contenuto && fotoPronte.length === 0 && riprese.length === 0 && !inCorso;
+  const elencoDocumenti = documenti.length > 0 && (
+    <ul className="composer__documenti" aria-label="Documenti da allegare">
+      {documenti.map((d) => (
+        <li key={d.chiave} className={`composer__documento composer__documento--${d.stato}`}>
+          <Icona nome="documento" dimensione={16} />
+          <span className="composer__documento-nome" title={d.file.name}>
+            {d.file.name}
+          </span>
+          {d.stato === "carica" ? (
+            <span className="etichetta-mono">Carico {Math.round(d.avanzamento * 100)}%</span>
+          ) : (
+            <select
+              aria-label={`Tipo di ${d.file.name}`}
+              className="composer__documento-tipo"
+              value={d.tipo}
+              onChange={(e) =>
+                setDocumenti((ds) => ds.map((y) => (y.chiave === d.chiave ? { ...y, tipo: e.target.value as TipoDocumentoProgetto, stato: "pronto" } : y)))
+              }
+            >
+              {TIPI_DOCUMENTO_PROGETTO.map((t) => (
+                <option key={t} value={t}>
+                  {NOMI_DOCUMENTO_PROGETTO[t]}
+                </option>
+              ))}
+            </select>
+          )}
+          {d.stato !== "carica" && (
+            <button
+              type="button"
+              className="composer__rimuovi composer__rimuovi--riga"
+              aria-label={`Togli ${d.file.name}`}
+              onClick={() => setDocumenti((ds) => ds.filter((y) => y.chiave !== d.chiave))}
+            >
+              <Icona nome="chiudi" dimensione={12} tratto={2} />
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+
+  const vuoto = !contenuto && fotoPronte.length === 0 && riprese.length === 0 && documenti.length === 0 && !inCorso;
   return (
     <form className={`composer composer--compatto${vuoto ? " composer--vuoto" : ""}`} onSubmit={submit}>
       {selettoreFoto}
+      {cantiereDocumenti && (
+        <input
+          ref={selettoreDocumenti}
+          type="file"
+          accept=".pdf,.xlsx,.csv,image/*"
+          multiple
+          hidden
+          onChange={(e) => {
+            aggiungiDocumenti(e.target.files);
+            e.target.value = "";
+          }}
+        />
+      )}
       {anteprime}
+      {elencoDocumenti}
       {stato}
       <div className="composer__riga">
-        <button
-          type="button"
-          className="btn-icona btn-icona--bordo composer__allega"
-          aria-label="Allega foto"
-          onClick={() => selettore.current?.click()}
-        >
-          <Icona nome="piu" className="solo-desktop" />
-          <Icona nome="fotocamera" dimensione={20} className="solo-mobile" />
-        </button>
+        {cantiereDocumenti ? (
+          <button
+            type="button"
+            className="btn-icona btn-icona--bordo composer__allega"
+            aria-label="Allega un documento di progetto"
+            title="Allega un documento di progetto"
+            onClick={() => selettoreDocumenti.current?.click()}
+          >
+            <Icona nome="graffetta" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-icona btn-icona--bordo composer__allega"
+            aria-label="Allega foto"
+            onClick={() => selettore.current?.click()}
+          >
+            <Icona nome="piu" className="solo-desktop" />
+            <Icona nome="fotocamera" dimensione={20} className="solo-mobile" />
+          </button>
+        )}
         {onApriRiprese && (
           <button
             type="button"

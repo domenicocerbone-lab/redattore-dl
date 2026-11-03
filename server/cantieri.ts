@@ -244,7 +244,8 @@ export async function aggiornaScheda(id: string, dati: unknown): Promise<SchedaC
   const r = Modifiche.safeParse(dati);
   if (!r.success) throw new Error(r.error.issues[0]?.message ?? "Dati della scheda non validi.");
   Object.assign(s, r.data);
-  // Un valore corretto a mano non è più «dedotto»: la fonte resta, ma come letta dall'utente.
+  // Zone ritoccate a mano o in chat: una nuova lettura non le sostituisce da sola.
+  if (r.data.zone) s.zoneRiviste = true;
   await salvaScheda(s);
   return s;
 }

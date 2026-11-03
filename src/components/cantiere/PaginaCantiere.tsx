@@ -1,12 +1,13 @@
-// Scheda del cantiere: creazione, onboarding dai documenti di progetto (documenti →
-// revisione → conferma) e, a scheda confermata, consultazione e modifica.
+// Scheda del cantiere: creazione e onboarding dai documenti di progetto (documenti, poi
+// revisione e conferma in chat con il Redattore) e, a scheda confermata, consultazione e
+// modifica a mano.
 
 import { useEffect, useState, type FormEvent } from "react";
-import { eScheda, type SchedaCantiere, type TabelleCantiere } from "../../../shared/cantieri";
-import { formatEuro } from "../../../shared/numeri";
+import { eScheda } from "../../../shared/cantieri";
 import { api } from "../../lib/api";
 import { impostaCantiere, ricaricaCantiere, useCantiere } from "../../lib/cantieri";
-import { caricaSessione } from "../../lib/sessione";
+import { caricaSessione, useSessione } from "../../lib/sessione";
+import { apriRevisione } from "../../lib/stato";
 import { Icona } from "../Icone";
 import { SezioneComputo } from "./SezioneComputo";
 import { SezioneDati } from "./SezioneDati";
@@ -94,19 +95,29 @@ function NuovoCantiere({ onApriMenu }: { onApriMenu: () => void }) {
   );
 }
 
-type Passo = "documenti" | "revisione" | "conferma";
-const PASSI: { id: Passo; nome: string }[] = [
-  { id: "documenti", nome: "Documenti" },
-  { id: "revisione", nome: "Revisione" },
-  { id: "conferma", nome: "Conferma" },
-];
+/** Avvia o riprende la revisione della scheda in chat con il Redattore. */
+function useApriRevisione(id: string) {
+  const [occupato, setOccupato] = useState(false);
+  const [errore, setErrore] = useState<string | null>(null);
+  async function apri(primoMessaggio: string) {
+    setOccupato(true);
+    setErrore(null);
+    try {
+      await apriRevisione(id, primoMessaggio);
+    } catch (e) {
+      setErrore((e as Error).message);
+      setOccupato(false);
+    }
+  }
+  return { apri, occupato, errore };
+}
 
 function Scheda({ id, onApriMenu, onUsa }: Props) {
   const voce = useCantiere(id);
   const s = voce?.stato === "pronto" && eScheda(voce.cantiere) ? voce.cantiere : null;
-  const [passo, setPasso] = useState<Passo | null>(null);
   const [scheda, setScheda] = useState<"dati" | "zone" | "documenti">("dati");
-  const [appenaConfermata, setAppenaConfermata] = useState(false);
+  const revisione = useApriRevisione(id);
+  const io = useSessione()?.persona.id ?? "";
   const inLavoro = Boolean(s && (s.zoneInPreparazione || s.documenti.some((d) => d.stato === "in_coda" || d.stato === "in_lettura")));
 
   // Mentre il server legge i documenti o prepara le zone, la scheda si aggiorna da sola.
@@ -115,11 +126,6 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
     const t = window.setInterval(() => void ricaricaCantiere(id), 2000);
     return () => window.clearInterval(t);
   }, [id, inLavoro]);
-
-  // Si riparte dal punto giusto: documenti se non ce ne sono di letti, altrimenti revisione.
-  useEffect(() => {
-    if (s && passo === null) setPasso(s.documenti.some((d) => d.stato === "letto") && !inLavoro ? "revisione" : "documenti");
-  }, [s, passo, inLavoro]);
 
   if (!voce || voce.stato === "carico") {
     return (
@@ -137,26 +143,6 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
           <p className="cantiere__aiuto">
             {voce.stato === "errore" ? voce.errore : "È un cantiere di esempio: non ha una scheda da compilare."}
           </p>
-        </div>
-      </main>
-    );
-  }
-
-  if (appenaConfermata) {
-    return (
-      <main className="vista cantiere">
-        <Testata titolo={s.nome} onApriMenu={onApriMenu} stato="attiva" />
-        <div className="cantiere__corpo">
-          <section className="cantiere__sezione cantiere__pronto">
-            <h2 className="cantiere__sottotitolo">Cantiere pronto</h2>
-            <p className="cantiere__nota">
-              Da ora il Redattore usa questa scheda in ogni nuovo report: soggetti e importi nelle intestazioni, computo e
-              programma consultati quando servono. Puoi correggerla quando vuoi da «Scheda del cantiere».
-            </p>
-            <button type="button" className="btn btn--primario" onClick={() => onUsa(s.id)}>
-              Inizia un report →
-            </button>
-          </section>
         </div>
       </main>
     );
@@ -180,10 +166,25 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
                 {t === "dati" ? "Dati" : t === "zone" ? `Zone (${s.zone.length})` : `Documenti (${s.documenti.length})`}
               </button>
             ))}
-            <button type="button" className="btn btn--piccolo cantiere__usa" onClick={() => onUsa(s.id)}>
-              Nuovo report su questo cantiere →
-            </button>
+            <span className="cantiere__usa">
+              <button
+                type="button"
+                className="btn btn--piccolo"
+                disabled={revisione.occupato}
+                onClick={() => void revisione.apri("Voglio correggere la scheda del cantiere.")}
+              >
+                Correggi in chat
+              </button>
+              <button type="button" className="btn btn--piccolo" onClick={() => onUsa(s.id)}>
+                Nuovo report su questo cantiere →
+              </button>
+            </span>
           </div>
+          {revisione.errore && (
+            <p className="cantiere__errore" role="alert">
+              {revisione.errore}
+            </p>
+          )}
           {scheda === "dati" && (
             <>
               <SezioneDati s={s} />
@@ -197,164 +198,61 @@ function Scheda({ id, onApriMenu, onUsa }: Props) {
     );
   }
 
-  const attuale = passo ?? "documenti";
+  // In bozza: si caricano i documenti, poi revisione e conferma si fanno in chat con il Redattore.
+  const giaIniziata = Boolean(s.revisioni?.[io]);
+  const letti = s.documenti.filter((d) => d.stato === "letto").length;
+  const primo = letti
+    ? "Ho caricato i documenti di progetto: rivediamo insieme la scheda del cantiere."
+    : "Non ho documenti di progetto da caricare: compiliamo insieme la scheda del cantiere.";
   return (
     <main className="vista cantiere">
       <Testata titolo={s.nome} onApriMenu={onApriMenu} stato="bozza" />
       <div className="cantiere__corpo">
         <ol className="cantiere__passi">
-          {PASSI.map((p, i) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                className={`cantiere__passo${attuale === p.id ? " cantiere__passo--attuale" : ""}`}
-                aria-current={attuale === p.id ? "step" : undefined}
-                onClick={() => setPasso(p.id)}
-              >
-                <span className="cantiere__passo-numero">{i + 1}</span>
-                {p.nome}
-              </button>
-            </li>
-          ))}
+          <li>
+            <span className="cantiere__passo cantiere__passo--attuale" aria-current="step">
+              <span className="cantiere__passo-numero">1</span>
+              Documenti
+            </span>
+          </li>
+          <li>
+            <button
+              type="button"
+              className="cantiere__passo"
+              disabled={inLavoro || revisione.occupato}
+              onClick={() => void revisione.apri(primo)}
+            >
+              <span className="cantiere__passo-numero">2</span>
+              Revisione in chat
+            </button>
+          </li>
         </ol>
 
-        {attuale === "documenti" && (
-          <>
-            <SezioneDocumenti s={s} />
-            <div className="cantiere__avanti">
-              <span className="cantiere__aiuto">
-                {inLavoro
-                  ? "Sto leggendo: puoi andare avanti quando ho finito, o tornare più tardi."
-                  : s.documenti.length
-                    ? "Lettura finita: rivedi quello che ho trovato."
-                    : "Non hai documenti? Puoi anche compilare la scheda a mano."}
-              </span>
-              <button type="button" className="btn btn--primario" disabled={inLavoro} onClick={() => setPasso("revisione")}>
-                {s.documenti.length ? "Avanti: rivedi i dati →" : "Compila a mano →"}
-              </button>
-            </div>
-          </>
+        <SezioneDocumenti s={s} />
+        <div className="cantiere__avanti">
+          <span className="cantiere__aiuto">
+            {inLavoro
+              ? "Sto leggendo: quando ho finito rivediamo insieme quello che ho trovato. Puoi anche chiudere e tornare più tardi."
+              : s.documenti.length
+                ? "Lettura finita: ti faccio vedere cosa ho trovato e ti chiedo conferma di quello che ho dedotto."
+                : "Non hai documenti? Compiliamo la scheda parlando: ti chiedo io quello che serve."}
+          </span>
+          <button type="button" className="btn btn--primario" disabled={inLavoro || revisione.occupato} onClick={() => void revisione.apri(primo)}>
+            {revisione.occupato
+              ? "Apro la chat…"
+              : giaIniziata
+                ? "Riprendi la revisione in chat →"
+                : s.documenti.length
+                  ? "Rivediamo insieme in chat →"
+                  : "Compiliamo insieme in chat →"}
+          </button>
+        </div>
+        {revisione.errore && (
+          <p className="cantiere__errore" role="alert">
+            {revisione.errore}
+          </p>
         )}
-        {attuale === "revisione" && (
-          <>
-            <SezioneDati s={s} />
-            <SezioneComputo s={s} />
-            <SezioneZone s={s} />
-            <div className="cantiere__avanti">
-              <button type="button" className="btn btn--piccolo" onClick={() => setPasso("documenti")}>
-                ← Documenti
-              </button>
-              <button type="button" className="btn btn--primario" onClick={() => setPasso("conferma")}>
-                Avanti: conferma →
-              </button>
-            </div>
-          </>
-        )}
-        {attuale === "conferma" && <Conferma s={s} onConfermata={() => setAppenaConfermata(true)} onIndietro={() => setPasso("revisione")} />}
       </div>
     </main>
-  );
-}
-
-const norm = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
-
-function Conferma({ s, onConfermata, onIndietro }: { s: SchedaCantiere; onConfermata: () => void; onIndietro: () => void }) {
-  const [tabelle, setTabelle] = useState<TabelleCantiere | null>(null);
-  const [occupato, setOccupato] = useState(false);
-  const [errore, setErrore] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.tabelleCantiere(s.id).then(setTabelle, () => undefined);
-  }, [s.id]);
-
-  const ruolo = (...parole: string[]) => s.soggetti.some((x) => parole.some((p) => norm(x.ruolo).includes(p)) && x.nome.trim());
-  const daVerificare =
-    Object.values(s.fonti).filter((f) => f.certezza === "dedotto").length +
-    s.soggetti.filter((x) => x.fonte?.certezza === "dedotto").length +
-    s.zone.filter((z) => z.certezza === "dedotto").length;
-  const totale = (tabelle?.voci ?? []).reduce((t, v) => t + (v.importo ?? 0), 0);
-  const controlli: { ok: boolean; testo: string }[] = [
-    { ok: ruolo("committente", "stazione appaltante"), testo: "Committente o stazione appaltante" },
-    { ok: ruolo("impresa", "appaltator", "esecutore"), testo: "Impresa esecutrice" },
-    { ok: ruolo("direttore dei lavori", "direzione lavori"), testo: "Direttore dei Lavori" },
-    { ok: s.contratto.importo !== null, testo: s.contratto.importo !== null ? `Importo contrattuale ${formatEuro(s.contratto.importo)}` : "Importo contrattuale" },
-    { ok: Boolean(s.date.consegnaLavori || s.date.ultimazionePrevista), testo: "Date contrattuali" },
-    { ok: (tabelle?.voci.length ?? 0) > 0, testo: tabelle?.voci.length ? `Computo: ${tabelle.voci.length} voci${totale ? `, ${formatEuro(totale)}` : ""}` : "Computo metrico" },
-    ...((tabelle?.voci.length ?? 0) > 0
-      ? [
-          {
-            ok: s.anomalie.length === 0,
-            testo: s.anomalie.length
-              ? `${s.anomalie.length === 1 ? "1 anomalia" : `${s.anomalie.length} anomalie`} del computo da controllare`
-              : "Nessuna anomalia aperta nel computo",
-          },
-        ]
-      : []),
-    { ok: (tabelle?.attivita.length ?? 0) > 0, testo: tabelle?.attivita.length ? `Programma: ${tabelle.attivita.length} attività` : "Cronoprogramma" },
-    {
-      ok: s.zone.length > 0,
-      testo: s.zone.length
-        ? `${s.zone.length === 1 ? "1 zona" : `${s.zone.length} zone`}${s.vociSenzaZona.length ? `, ${s.vociSenzaZona.length} ${s.vociSenzaZona.length === 1 ? "voce" : "voci"} senza zona` : ""}`
-        : "Zone",
-    },
-  ];
-  const errori = s.documenti.filter((d) => d.stato === "errore");
-
-  async function conferma() {
-    setOccupato(true);
-    setErrore(null);
-    try {
-      const confermata = await api.confermaCantiere(s.id);
-      onConfermata();
-      impostaCantiere(confermata);
-      await caricaSessione();
-    } catch (e) {
-      setErrore((e as Error).message);
-    } finally {
-      setOccupato(false);
-    }
-  }
-
-  return (
-    <section className="cantiere__sezione" aria-labelledby="titolo-conferma">
-      <h2 id="titolo-conferma" className="cantiere__sottotitolo">
-        Prima di confermare
-      </h2>
-      <ul className="cantiere__controlli">
-        {controlli.map((c) => (
-          <li key={c.testo} className={c.ok ? "" : "cantiere__controllo--manca"}>
-            <Icona nome={c.ok ? "spunta" : "trattino"} dimensione={16} />
-            {c.testo}
-            {!c.ok && <span className="etichetta-mono"> · manca</span>}
-          </li>
-        ))}
-      </ul>
-      {daVerificare > 0 && (
-        <p className="cantiere__nota">
-          {daVerificare === 1 ? "1 valore è segnato" : `${daVerificare} valori sono segnati`} «da verificare»: il Redattore li
-          userà, ma te li ricorderà quando finiscono in un documento.
-        </p>
-      )}
-      {errori.length > 0 && (
-        <p className="cantiere__errore">
-          {errori.length === 1 ? "Un documento non è stato letto" : `${errori.length} documenti non sono stati letti`}:{" "}
-          {errori.map((d) => d.nome).join(", ")}.
-        </p>
-      )}
-      <p className="cantiere__nota">Quello che manca lo puoi aggiungere anche dopo: il Redattore te lo chiederà quando serve.</p>
-      {errore && (
-        <p className="cantiere__errore" role="alert">
-          {errore}
-        </p>
-      )}
-      <div className="cantiere__avanti">
-        <button type="button" className="btn btn--piccolo" onClick={onIndietro}>
-          ← Revisione
-        </button>
-        <button type="button" className="btn btn--primario" disabled={occupato} onClick={() => void conferma()}>
-          {occupato ? "Confermo…" : "Conferma la scheda"}
-        </button>
-      </div>
-    </section>
   );
 }

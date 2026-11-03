@@ -250,11 +250,19 @@ export interface FotoAllegata {
   ripresa?: { zona: string; data: string };
 }
 
+/** Documento di progetto allegato in chat durante la revisione della scheda. */
+export interface AllegatoProgetto {
+  id: string;
+  nome: string;
+  tipo: string;
+}
+
 export interface MessaggioUtente {
   id: string;
   ruolo: "utente";
   testo: string;
   foto: FotoAllegata[];
+  allegati?: AllegatoProgetto[];
   dettato?: { secondi: number };
   creatoIl: string;
 }
@@ -266,6 +274,8 @@ export interface MessaggioAssistente {
   creatoIl: string;
   feedback?: "utile" | "da_migliorare";
   errore?: string;
+  /** Modifiche alla scheda del cantiere fatte dal Redattore in questo turno, in parole. */
+  modificheScheda?: string[];
 }
 
 export type Messaggio = MessaggioUtente | MessaggioAssistente;

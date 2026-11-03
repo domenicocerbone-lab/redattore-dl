@@ -163,6 +163,10 @@ function Redattore() {
             onApriMenu={() => setMenuMobile(true)}
             onNuovo={() => vai(null)}
             onPannello={onPannello}
+            onUsaCantiere={(id) => {
+              cambiaCantiere(id);
+              vai(null);
+            }}
           />
         ) : (
           <Home

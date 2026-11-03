@@ -6,14 +6,16 @@ import type { EventoTurno, NuovoMessaggio } from "../../shared/api";
 import type {
   Conversazione,
   ConversazioneMeta,
+  AllegatoProgetto,
   FotoAllegata,
   MessaggioUtente,
   Parte,
   Parziale,
 } from "../../shared/schema";
 import { api, turno as apriTurno } from "./api";
+import { ricaricaCantiere } from "./cantieri";
 
-export type FaseTurno = "attesa" | "ragiona" | "scrive" | "calcola";
+export type FaseTurno = "attesa" | "ragiona" | "scrive" | "calcola" | "legge";
 
 export interface TurnoInCorso {
   fase: FaseTurno;
@@ -110,6 +112,10 @@ function gestisci(id: string, e: EventoTurno) {
       break;
     case "inizio":
       break;
+    case "scheda":
+      // Il Redattore ha modificato la scheda in chat: il pannello la rilegge.
+      void ricaricaCantiere(e.cantiereId);
+      break;
     case "stato":
       aggiorna(id, (v) => (v.turno ? { ...v, turno: { ...v.turno, fase: e.stato } } : v));
       break;
@@ -153,9 +159,11 @@ async function eseguiTurno(id: string, url: string, corpo: NuovoMessaggio | Reco
 export interface Invio extends NuovoMessaggio {
   /** Anteprime locali delle foto, mostrate finché il server non conferma. */
   anteprime: FotoAllegata[];
+  /** Documenti di progetto allegati, mostrati finché il server non conferma. */
+  allegati?: AllegatoProgetto[];
 }
 
-export function inviaMessaggio(id: string, { anteprime, ...corpo }: Invio) {
+export function inviaMessaggio(id: string, { anteprime, allegati, ...corpo }: Invio) {
   aggiorna(id, (v) => ({
     ...v,
     inAttesa: {
@@ -163,6 +171,7 @@ export function inviaMessaggio(id: string, { anteprime, ...corpo }: Invio) {
       ruolo: "utente",
       testo: corpo.testo,
       foto: anteprime,
+      ...(allegati?.length ? { allegati } : {}),
       dettato: corpo.dettato,
       creatoIl: new Date().toISOString(),
     },
@@ -227,4 +236,19 @@ export async function impostaDefinitivo(id: string, chiave: string, definitivo: 
     ...c,
     statiDocumento: stato ? { ...c.statiDocumento, [chiave]: stato } : senza(c.statiDocumento, chiave),
   }));
+}
+
+/**
+ * Apre la chat di revisione della scheda del cantiere (la riprende se c'è già) e, la
+ * prima volta, la avvia con un messaggio a nome dell'utente.
+ */
+export async function apriRevisione(cantiereId: string, primoMessaggio: string): Promise<void> {
+  const { conversazione, nuova } = await api.revisioneCantiere(cantiereId);
+  if (!voci.get(conversazione.id)?.conversazione) {
+    voci.set(conversazione.id, { ...VUOTA, conversazione });
+    notifica();
+  }
+  window.location.hash = `#/c/${conversazione.id}`;
+  if (nuova && !voci.get(conversazione.id)?.turno) void inviaMessaggio(conversazione.id, { testo: primoMessaggio, foto: [], anteprime: [] });
+  void ricaricaElenco();
 }

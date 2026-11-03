@@ -2,7 +2,7 @@
 // esegue gli strumenti di calcolo finché il modello li chiede, e trasforma il JSON
 // che arriva in parti che l'interfaccia mostra mentre vengono scritte.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
@@ -24,13 +24,15 @@ import {
   type Parziale,
 } from "../shared/schema";
 import { dataItaliana } from "../shared/nowvision";
-import { leggiFoto, urlFoto, type ConversazioneSalvata } from "./archivio";
+import { NOMI_DOCUMENTO_PROGETTO } from "../shared/cantieri";
+import { leggiFoto, proprietario, urlFoto, type ConversazioneSalvata } from "./archivio";
 import { FORMATO_RISPOSTA, ISTRUZIONI_FORMATO } from "./formato";
 import { scheda } from "./cantieri";
 import { contestoMessaggio, impronteScheda, schedaCantiere } from "./istruzioni";
 import { parteValida } from "./riparazione";
 import { contestoPerIlModello, datiNowVision, fileRipresa, urlRipresa } from "./nowvision";
-import { DEFINIZIONI_STRUMENTI, eseguiStrumento } from "./strumenti";
+import { DEFINIZIONI_REVISIONE, ID_REVISIONE, eseguiStrumentoRevisione, notaAllegati, schedaInRevisione } from "./revisione";
+import { DEFINIZIONI_STRUMENTI, eseguiStrumento, type ContestoStrumento } from "./strumenti";
 import { aggiungiChiamata, type Consumo } from "./utilizzo";
 
 export const MODELLO = process.env.REDATTORE_MODELLO ?? "claude-opus-5-5";
@@ -68,7 +70,18 @@ export async function aggiungiMessaggioUtente(
   intestazione.push(...conv.notePendenti);
   // La scheda del cantiere è cambiata dopo l'inizio della conversazione: il prompt è fisso, la nota no.
   const c = scheda(conv.cantiereId);
-  if (c?.stato === "attiva") {
+  const allegati = c ? (input.documenti ?? []).filter((id) => c.documenti.some((d) => d.id === id)).slice(0, 10) : [];
+  if (c && conv.modalita === ID_REVISIONE) {
+    // In revisione la scheda cambia di continuo: arriva intera ogni volta che è diversa da quella già vista.
+    const testoScheda = await schedaInRevisione(c);
+    const impronta = createHash("sha256").update(testoScheda).digest("hex").slice(0, 16);
+    if (conv.schedaInviata !== impronta) {
+      intestazione.push(`[Scheda del cantiere aggiornata a ora:\n${testoScheda}]`);
+      conv.schedaInviata = impronta;
+    }
+    const nota = notaAllegati(c, allegati);
+    if (nota) intestazione.push(nota);
+  } else if (c?.stato === "attiva") {
     const impronta = impronteScheda(c);
     if (conv.schedaInviata !== impronta) {
       intestazione.push(`[La scheda del cantiere è stata aggiornata: usa questi dati al posto di quelli del prompt.\n${schedaCantiere(c)}]`);
@@ -143,13 +156,21 @@ export async function aggiungiMessaggioUtente(
   }
 
   const testo = input.testo.trim();
-  blocchi.push({ type: "text", text: testo || "(nessun testo: solo foto)" });
+  blocchi.push({ type: "text", text: testo || (allegati.length ? "(nessun testo: solo documenti)" : "(nessun testo: solo foto)") });
 
   const messaggio: MessaggioUtente = {
     id: randomUUID(),
     ruolo: "utente",
     testo,
     foto,
+    ...(c && allegati.length
+      ? {
+          allegati: allegati.map((id) => {
+            const d = c.documenti.find((x) => x.id === id)!;
+            return { id, nome: d.nome, tipo: NOMI_DOCUMENTO_PROGETTO[d.tipo] };
+          }),
+        }
+      : {}),
     ...(input.dettato ? { dettato: input.dettato } : {}),
     creatoIl: new Date().toISOString(),
   };
@@ -296,6 +317,11 @@ export async function eseguiTurno(
   const id = randomUUID();
   emetti({ tipo: "inizio", id });
   const lunghezzaIniziale = conv.apiMessaggi.length;
+  const revisione = conv.modalita === ID_REVISIONE;
+  const contesto: ContestoStrumento = { cantiereId: conv.cantiereId, personaId: proprietario(conv), modifiche: [] };
+  // Le modifiche alla scheda restano anche se il turno poi fallisce: il messaggio le racconta.
+  const conModifiche = (m: MessaggioAssistente): MessaggioAssistente =>
+    contesto.modifiche?.length ? { ...m, modificheScheda: [...contesto.modifiche] } : m;
   const partiCompletate: Parte[] = [];
   let titolo = "";
   let tentativiJson = 0;
@@ -325,7 +351,7 @@ export async function eseguiTurno(
             output_config: formatoStrutturato ? { effort: SFORZO, format: FORMATO_RISPOSTA } : { effort: SFORZO },
             cache_control: { type: "ephemeral" },
             system: formatoStrutturato ? conv.sistema : conv.sistema + ISTRUZIONI_FORMATO,
-            tools: DEFINIZIONI_STRUMENTI,
+            tools: revisione ? DEFINIZIONI_REVISIONE : DEFINIZIONI_STRUMENTI,
             messages: conv.apiMessaggi,
           },
           { signal: segnale },
@@ -362,14 +388,14 @@ export async function eseguiTurno(
       if (finale.stop_reason === "refusal") {
         // Anche i modelli di fallback hanno rifiutato: l'eventuale parziale si scarta.
         conv.apiMessaggi.length = lunghezzaIniziale;
-        return {
+        return conModifiche({
           id,
           ruolo: "assistente",
           parti: [],
           creatoIl: new Date().toISOString(),
           errore:
             "Non posso preparare questa risposta. Riformula la richiesta descrivendo il contesto di cantiere.",
-        };
+        });
       }
 
       const contenuto = dopoFallback(finale.content);
@@ -380,11 +406,14 @@ export async function eseguiTurno(
 
       if (usi.length > 0) {
         const troncato = finale.stop_reason === "max_tokens";
+        const prima = contesto.modifiche?.length ?? 0;
         const risultati: BetaToolResultBlockParam[] = await Promise.all(
           usi.map(async (uso): Promise<BetaToolResultBlockParam> => {
             const esito = troncato
               ? { contenuto: "Input troncato per limite di lunghezza: ripeti la chiamata.", errore: true }
-              : await eseguiStrumento(uso.name, uso.input, { cantiereId: conv.cantiereId });
+              : revisione
+                ? await eseguiStrumentoRevisione(uso.name, uso.input, contesto)
+                : await eseguiStrumento(uso.name, uso.input, contesto);
             return {
               type: "tool_result",
               tool_use_id: uso.id,
@@ -394,6 +423,7 @@ export async function eseguiTurno(
           }),
         );
         conv.apiMessaggi.push({ role: "user", content: risultati });
+        if ((contesto.modifiche?.length ?? 0) > prima) emetti({ tipo: "scheda", cantiereId: conv.cantiereId });
         const testo = testoDi(contenuto);
         if (testo) partiCompletate.push(...partiFinali(testo, conv.modalita).parti);
         continue;
@@ -403,44 +433,63 @@ export async function eseguiTurno(
       partiCompletate.push(...risposta.parti);
       titolo = risposta.titolo;
       if (finale.stop_reason === "max_tokens") {
-        return {
+        return conModifiche({
           id,
           ruolo: "assistente",
           parti: numeraDocumenti(conv, partiCompletate),
           creatoIl: new Date().toISOString(),
           errore: "La risposta era troppo lunga ed è stata interrotta. Chiedi di continuare o di accorciare.",
-        };
+        });
       }
       break;
     }
   } catch (e) {
     // Si torna allo stato subito dopo il messaggio del DL: «Rigenera» riparte da lì.
     conv.apiMessaggi.length = lunghezzaIniziale;
-    return {
+    return conModifiche({
       id,
       ruolo: "assistente",
       parti: [],
       creatoIl: new Date().toISOString(),
       errore: messaggioErrore(e),
-    };
+    });
   }
 
   if (titolo.trim()) conv.titolo = titolo.trim().slice(0, 60);
   if (partiCompletate.length === 0) {
-    return {
+    return conModifiche({
       id,
       ruolo: "assistente",
       parti: [],
       creatoIl: new Date().toISOString(),
       errore: "Il Redattore non ha prodotto una risposta leggibile. Prova a rigenerarla.",
-    };
+    });
   }
-  return {
+  return conModifiche({
     id,
     ruolo: "assistente",
     parti: numeraDocumenti(conv, partiCompletate),
     creatoIl: new Date().toISOString(),
-  };
+  });
+}
+
+/**
+ * Revisione: prima di rigenerare, se il tentativo precedente ha già modificato la scheda,
+ * il messaggio dell'utente (in coda alla cronologia) riceve la scheda com'è ora, così il
+ * Redattore non ripete modifiche già fatte.
+ */
+export async function schedaPerRigenera(conv: ConversazioneSalvata) {
+  const c = scheda(conv.cantiereId);
+  const ultimo = conv.apiMessaggi.at(-1);
+  if (!c || conv.modalita !== ID_REVISIONE || ultimo?.role !== "user" || !Array.isArray(ultimo.content)) return;
+  const testoScheda = await schedaInRevisione(c);
+  const impronta = createHash("sha256").update(testoScheda).digest("hex").slice(0, 16);
+  if (conv.schedaInviata === impronta) return;
+  ultimo.content.push({
+    type: "text",
+    text: `[Il tentativo di risposta precedente ha già modificato la scheda: non ripetere quelle modifiche. Scheda com'è ora:\n${testoScheda}]`,
+  });
+  conv.schedaInviata = impronta;
 }
 
 /** Riporta la conversazione a subito dopo l'ultimo messaggio del DL, per rigenerare la risposta. */

@@ -116,6 +116,16 @@
 }
 .cantiere__usa {
   margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+button.cantiere__passo {
+  cursor: pointer;
+}
+button.cantiere__passo:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 /* Sezioni */
@@ -637,5 +647,121 @@ details.cantiere__riquadro summary {
   .cantiere__usa {
     margin-left: 0;
     width: 100%;
+  }
+}
+
+/* Pannello della scheda accanto alla chat di revisione: più stretto della chat. */
+.pannello-doc.scheda-pannello {
+  flex: 1 1 420px;
+  max-width: 620px;
+}
+@media (max-width: 1100px) {
+  .pannello-doc.scheda-pannello {
+    max-width: none;
+  }
+}
+.scheda-pannello__corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+}
+.scheda-pannello__sezione {
+  background: var(--nv-white);
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scheda-pannello__titolo {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.scheda-pannello__apribile summary {
+  cursor: pointer;
+}
+.scheda-pannello__apribile[open] summary {
+  margin-bottom: 4px;
+}
+.scheda-pannello__valori {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(104px, max-content) 1fr;
+  gap: 6px 14px;
+  font-size: 13.5px;
+}
+.scheda-pannello__valore {
+  display: contents;
+}
+.scheda-pannello__valore dt {
+  padding-top: 2px;
+}
+.scheda-pannello__valore dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.scheda-pannello__valore--manca dd {
+  color: var(--nv-ink-soft);
+  font-style: italic;
+}
+.scheda-pannello__elenco {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.scheda-pannello__elenco li {
+  display: grid;
+  grid-template-columns: minmax(104px, 32%) 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.scheda-pannello__elenco li > span:last-child {
+  overflow-wrap: anywhere;
+}
+.scheda-pannello__elenco .chip-fonte {
+  margin-left: 6px;
+}
+.scheda-pannello__pronto {
+  border: 1px solid var(--nv-mint-dark);
+  background: var(--nv-mint-soft);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.scheda-pannello__pronto .cantiere__nota {
+  margin: 0;
+}
+.scheda-pannello__conferma {
+  align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  .scheda-pannello__corpo {
+    padding: 14px 12px 28px;
+  }
+  .scheda-pannello__valori,
+  .scheda-pannello__elenco li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .scheda-pannello__valori {
+    gap: 2px;
+  }
+  .scheda-pannello__valore dd {
+    margin-bottom: 8px;
   }
 }

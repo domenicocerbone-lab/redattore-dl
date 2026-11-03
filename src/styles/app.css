@@ -381,6 +381,21 @@ a.btn {
   .testata__destra {
     display: none;
   }
+  /* La scheda in revisione si apre anche da telefono. */
+  .testata__destra--sempre {
+    display: flex;
+  }
+  .testata__scheda {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    border: 0;
+    background: transparent;
+  }
+  .testata__scheda-testo {
+    display: none;
+  }
   .testata__contesto {
     flex-direction: column;
     gap: 3px;

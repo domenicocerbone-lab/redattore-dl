@@ -197,7 +197,7 @@ async function esegui(cantiereId: string, documentoId: string) {
     modello: consumo.modello || undefined,
   });
   // Finita l'ultima lettura di una scheda in bozza, si propongono le zone.
-  if (!inCorso(s) && s.stato === "bozza" && s.documenti.some((x) => x.stato === "letto")) {
+  if (!inCorso(s) && s.stato === "bozza" && !s.zoneRiviste && s.documenti.some((x) => x.stato === "letto")) {
     await proponiZone(s, d.caricatoDa);
   }
 }
@@ -877,6 +877,7 @@ export async function proponiZone(s: SchedaCantiere, personaId: string) {
       });
     const assegnate = new Set(s.zone.flatMap((z) => z.vociComputo));
     s.vociSenzaZona = [...new Set([...r.voci_senza_zona.filter((w) => wbsVoci.has(w)), ...[...wbsVoci].filter((w) => !assegnate.has(w))])];
+    s.zoneRiviste = false;
     s.decisioni = r.decisioni
       .filter((x) => x.domanda.trim())
       .slice(0, 3)

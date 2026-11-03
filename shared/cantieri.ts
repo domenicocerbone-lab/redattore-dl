@@ -161,6 +161,10 @@ export interface SchedaCantiere extends Cantiere {
   anomalie: AnomaliaComputo[];
   /** Anomalie ignorate dall'utente, per «wbs|tipo»: non tornano a una nuova lettura. */
   anomalieIgnorate: string[];
+  /** Conversazione di revisione della scheda, per persona. */
+  revisioni?: Record<string, string>;
+  /** Le zone sono state ritoccate dall'utente: una nuova lettura non le ripropone da sola. */
+  zoneRiviste?: boolean;
 }
 
 /** Computo e programma in forma leggera, per la revisione delle zone nell'interfaccia. */

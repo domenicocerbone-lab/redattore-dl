@@ -24,6 +24,8 @@ export interface NuovoMessaggio {
   dettato?: { secondi: number };
   /** Tipo di documento scelto nel campo di scrittura, se cambia rispetto alla conversazione. */
   modalita?: string;
+  /** Documenti di progetto già caricati sul cantiere e allegati al messaggio (revisione della scheda). */
+  documenti?: string[];
 }
 
 export interface FotoCaricata {
@@ -36,7 +38,9 @@ export interface FotoCaricata {
 export type EventoTurno =
   | { tipo: "utente"; messaggio: MessaggioUtente }
   | { tipo: "inizio"; id: string }
-  | { tipo: "stato"; stato: "ragiona" | "scrive" | "calcola" }
+  | { tipo: "stato"; stato: "ragiona" | "scrive" | "calcola" | "legge" }
+  /** Il Redattore ha modificato la scheda del cantiere: l'interfaccia la ricarica. */
+  | { tipo: "scheda"; cantiereId: string }
   | { tipo: "parti"; parti: Parziale<Parte>[] }
   | { tipo: "fine"; messaggio: MessaggioAssistente; conversazione: ConversazioneMeta }
   | { tipo: "errore"; messaggio: string };

@@ -965,6 +965,244 @@ function estrazioneFinta(obiettivo: string): unknown {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Revisione della scheda in chat (cantiere inventato «Residenza Esempio»): un copione
+// che segue la scheda inviata dal server e chiama davvero gli strumenti di modifica.
+
+type Risposta = { json?: unknown; strumento?: { nome: string; input: unknown } };
+
+/** Ultima scheda inviata dal server nei messaggi dell'utente. */
+function ultimaScheda(messaggi: Messaggio[]): string {
+  const t = messaggi
+    .filter((m) => m.role === "user")
+    .flatMap(testi)
+    .filter((x) => x.includes("Scheda del cantiere aggiornata a ora"));
+  return t.at(-1) ?? "";
+}
+
+function righeSezione(scheda: string, titolo: string): string[] {
+  const inizio = scheda.indexOf(`### ${titolo}`);
+  if (inizio < 0) return [];
+  const resto = scheda.slice(inizio).split("\n").slice(1);
+  const fine = resto.findIndex((r) => r.startsWith("### "));
+  return (fine < 0 ? resto : resto.slice(0, fine)).filter((r) => r.trim());
+}
+
+function revisioneFinta(messaggi: Messaggio[]): Risposta {
+  const scheda = ultimaScheda(messaggi);
+  const soggetti = righeSezione(scheda, "Soggetti")
+    .filter((r) => /^- S\d+/.test(r))
+    .map((r) => r.replace(/ \((?!da verificare)[^)]*\)$/, ""));
+  const cse = soggetti.find((r) => /\bCSE\b|coordinatore/i.test(r));
+  const codiceCse = cse ? /^- (S\d+)/.exec(cse)![1] : null;
+  const nomeCse = cse ? cse.split(" · ")[2]?.replace(/ \(.*$/, "") : "";
+  const anomalie = righeSezione(scheda, "Computo").filter((r) => /^- \S+ · \w+ · /.test(r));
+  const zone = righeSezione(scheda, "Zone").filter((r) => /^- z-/.test(r)).map((r) => ({ id: r.slice(2).split(" · ")[0], nome: r.split(" · ")[1] }));
+  const letti = righeSezione(scheda, "Documenti di progetto").filter((r) => r.includes(" · letto: ")).length;
+
+  const ultimo = messaggi.at(-1)!;
+  const blocchi = typeof ultimo.content === "string" ? [] : ultimo.content;
+  const risultato = blocchi.find((b) => b.type === "tool_result");
+
+  // Dopo uno strumento: si dice cosa è cambiato e si passa al punto successivo.
+  if (risultato) {
+    const precedente = messaggi.at(-2);
+    const uso = (typeof precedente?.content === "string" ? [] : (precedente?.content ?? [])).find((b) => b.type === "tool_use");
+    const nome = String(uso?.name ?? "");
+    let esito: { fatto?: string[]; esito?: string } = {};
+    try {
+      esito = JSON.parse(String(risultato.content));
+    } catch {
+      return { json: { parti: [testo(`Lo strumento ha risposto con un errore: ${String(risultato.content)}. Riproviamo?`)], titolo_conversazione: "" } };
+    }
+    if (risultato.is_error) {
+      return { json: { parti: [testo(`Non sono riuscito ad aggiornare la scheda: ${String(risultato.content)}`)], titolo_conversazione: "" } };
+    }
+    const fatto = (esito.fatto ?? []).join("; ");
+    if (nome === "modifica_soggetti") {
+      return {
+        json: {
+          parti: [
+            testo(`Fatto: ${fatto}.`),
+            testo("Contratto: **ritenuta 0,5%** e **ultimazione 24/08/2027** le ho dedotte, il **ribasso** non l'ho trovato. Qual è il ribasso d'asta? E gli altri due valori sono giusti?"),
+            azioni(["Ribasso 12,35%, il resto va bene", "Il ribasso è 12,35%; ritenuta e ultimazione vanno bene.", "primario"], ["Correggo io", "Il ribasso è ", "secondario", "scrivi"]),
+          ],
+          titolo_conversazione: "",
+        },
+      };
+    }
+    if (nome === "modifica_dati") {
+      const a = anomalie[0];
+      const parti: unknown[] = [testo(`Aggiornato: ${fatto}.`)];
+      if (a) {
+        const [codice, , controllo] = a.slice(2).split(" · ");
+        parti.push(
+          testo(`Nel computo la voce **${codice}** non torna: ${controllo} Va bene così o è un errore da segnalare al progettista?`),
+          azioni(["Va bene così", "Va bene così, è un arrotondamento del computo.", "primario"], ["Lo segnalo al progettista", "Lo segnalo io al progettista, lasciala aperta.", "secondario"]),
+        );
+      }
+      return { json: { parti, titolo_conversazione: "" } };
+    }
+    if (nome === "ignora_anomalie") {
+      const nomi = zone.map((z) => z.nome).join(", ");
+      return {
+        json: {
+          parti: [
+            testo(`Chiusa: ${fatto}.`),
+            testo(`Zone: ho proposto ${zone.length} zone (${nomi}). Gli alloggi li segui piano per piano o tutti insieme?`),
+            azioni(
+              ["Unisci piano terra e primo", "Unisci piano terra e piano primo in una zona «Alloggi».", "primario"],
+              ["Vanno bene così", "Le zone vanno bene così.", "secondario"],
+            ),
+          ],
+          titolo_conversazione: "",
+        },
+      };
+    }
+    if (nome === "modifica_zone" || nome === "rispondi_decisioni") {
+      return {
+        json: {
+          parti: [
+            testo(`Fatto: ${fatto}.`),
+            {
+              tipo: "controlli",
+              titolo: "La scheda è pronta",
+              voci: [
+                { testo: "Soggetti: committente, impresa, DL e CSE", esito: "ok" },
+                { testo: "Contratto, ribasso e date", esito: "ok" },
+                { testo: `Computo con ${anomalie.length} ${anomalie.length === 1 ? "anomalia aperta" : "anomalie aperte"}`, esito: anomalie.length ? "attenzione" : "ok" },
+                { testo: `${zone.length} zone`, esito: "ok" },
+              ],
+            },
+            testo("Se va bene, confermo la scheda: da quel momento la uso in ogni report."),
+            azioni(["Conferma la scheda", "Conferma la scheda.", "primario"], ["Ancora una cosa", "Prima vorrei correggere ", "secondario", "scrivi"]),
+          ],
+          titolo_conversazione: "",
+        },
+      };
+    }
+    if (nome === "conferma_scheda") {
+      return {
+        json: {
+          parti: [testo(`${esito.esito ?? "Scheda confermata."} Puoi iniziare un report dal pannello della scheda; quello che manca lo aggiungiamo quando serve.`)],
+          titolo_conversazione: "",
+        },
+      };
+    }
+    return { json: { parti: [testo(`Fatto: ${fatto || esito.esito || "ok"}.`)], titolo_conversazione: "" } };
+  }
+
+  // Il testo dell'utente, non le note del server (che iniziano con «[»).
+  const ultimoTesto = testi(ultimo).filter((t) => !t.startsWith("[")).at(-1) ?? "";
+  const allegati = testi(ultimo)
+    .map((t) => /\[Documenti allegati dall'utente: (.+?)\. La scheda/.exec(t)?.[1])
+    .find(Boolean);
+  if (allegati) {
+    return {
+      json: {
+        parti: [testo(`Ho letto quello che mi hai mandato: ${allegati}. La scheda nel pannello è aggiornata.`)],
+        titolo_conversazione: "",
+      },
+    };
+  }
+  if (/conferma la scheda/i.test(ultimoTesto)) return { strumento: { nome: "conferma_scheda", input: {} } };
+  if (/unisci/i.test(ultimoTesto)) {
+    const scelte = zone.filter((z) => ultimoTesto.toLowerCase().includes(z.nome.toLowerCase()));
+    if (scelte.length >= 2) {
+      return {
+        strumento: {
+          nome: "modifica_zone",
+          input: { operazioni: [{ azione: "unisci", zona: scelte[0].id, altre_zone: scelte.slice(1).map((z) => z.id), nome: /«([^»]+)»/.exec(ultimoTesto)?.[1] ?? scelte[0].nome }] },
+        },
+      };
+    }
+  }
+  if (/va bene così/i.test(ultimoTesto) && anomalie.length) {
+    const [codice, tipo] = anomalie[0].slice(2).split(" · ");
+    return { strumento: { nome: "ignora_anomalie", input: { anomalie: [{ codice, tipo }], motivo: "controllata, va bene così" } } };
+  }
+  if (/le zone vanno bene/i.test(ultimoTesto)) {
+    return { strumento: { nome: "modifica_zone", input: { operazioni: zone.map((z) => ({ azione: "conferma", zona: z.id })) } } };
+  }
+  const ribasso = /ribasso[^0-9]*(\d+(?:[.,]\d+)?)/i.exec(ultimoTesto);
+  if (ribasso) {
+    return {
+      strumento: {
+        nome: "modifica_dati",
+        input: {
+          contratto: { ribasso_percentuale: Number(ribasso[1].replace(",", ".")) },
+          conferma: /vanno bene|giust/i.test(ultimoTesto) ? ["contratto.ritenutaPercentuale", "date.ultimazionePrevista"] : [],
+        },
+      },
+    };
+  }
+  if (/\bcse\b|coordinatore/i.test(ultimoTesto)) {
+    if (/^sì[\s,.!]/i.test(ultimoTesto.trim()) && codiceCse) {
+      return { strumento: { nome: "modifica_soggetti", input: { operazioni: [{ azione: "conferma", soggetto: codiceCse }] } } };
+    }
+    const nome = /(?:è|e')\s+(?:il |la |l')?(.+?)\.?$/i.exec(ultimoTesto.trim())?.[1]?.trim();
+    if (nome) {
+      return {
+        strumento: {
+          nome: "modifica_soggetti",
+          input: {
+            operazioni: [
+              codiceCse
+                ? { azione: "modifica", soggetto: codiceCse, nome }
+                : { azione: "aggiungi", ruolo: "Coordinatore per la sicurezza in esecuzione (CSE)", nome },
+            ],
+          },
+        },
+      };
+    }
+  }
+  const primo = !messaggi.some((m) => m.role === "assistant");
+  if (primo) {
+    return {
+      json: {
+        parti: [
+          testo(
+            letti
+              ? `Ho letto ${letti === 1 ? "1 documento" : `${letti} documenti`}: soggetti, importo e date dal contratto, ${anomalie.length ? `il computo con ${anomalie.length} ${anomalie.length === 1 ? "anomalia" : "anomalie"} da guardare` : "il computo"}, il programma e ${zone.length} zone. Ti chiedo conferma di quello che ho dedotto.`
+              : "Non ho documenti letti: compiliamo la scheda insieme. Se hai contratto, computo o cronoprogramma, allegali qui con la graffetta.",
+          ),
+          {
+            tipo: "dati_raccolti",
+            campi: [
+              campo("Documenti", letti ? `${letti} letti` : "", letti ? "ok" : "manca"),
+              campo("Committente", soggetti.find((r) => /committente/i.test(r))?.split(" · ")[2] ?? "", soggetti.some((r) => /committente/i.test(r)) ? "ok" : "manca"),
+              campo("Impresa esecutrice", soggetti.find((r) => /impresa/i.test(r))?.split(" · ")[2] ?? "", soggetti.some((r) => /impresa/i.test(r)) ? "ok" : "manca"),
+              campo("Direttore dei Lavori", soggetti.find((r) => /direttore/i.test(r))?.split(" · ")[2] ?? "", soggetti.some((r) => /direttore/i.test(r)) ? "ok" : "manca"),
+              campo("Coordinatore sicurezza", nomeCse ?? "", cse ? (cse.includes("da verificare") ? "da_chiarire" : "ok") : "manca"),
+              campo("Importo e ribasso", "ribasso mancante", "da_chiarire"),
+              campo("Date contrattuali", "ultimazione dedotta", "da_chiarire"),
+              campo("Computo", anomalie.length ? `${anomalie.length} anomalie` : "", anomalie.length ? "da_chiarire" : "ok"),
+              campo("Zone", `${zone.length} zone`, zone.length ? "ok" : "manca"),
+            ],
+          },
+          cse
+            ? testo(`Parto dai soggetti: il CSE **${nomeCse}** l'ho dedotto dal contratto, non è scritto alla lettera. È corretto?`)
+            : testo("Parto dai soggetti: non ho trovato il coordinatore per la sicurezza (CSE). Chi è?"),
+          cse
+            ? azioni(["Sì, è corretto", `Sì, il CSE è ${nomeCse}.`, "primario"], ["No, è un altro", "Il CSE è ", "secondario", "scrivi"])
+            : azioni(["Te lo scrivo", "Il CSE è ", "primario", "scrivi"]),
+        ],
+        titolo_conversazione: "",
+      },
+    };
+  }
+  return {
+    json: {
+      parti: [
+        testo(
+          "In modalità demo seguo un copione: rispondo su CSE, ribasso, anomalie del computo, unione di zone («unisci piano terra e piano primo») e «conferma la scheda». Con la chiave API il Redattore risponde a tutto.",
+        ),
+      ],
+      titolo_conversazione: "",
+    },
+  };
+}
+
 function testi(m: Messaggio): string[] {
   if (typeof m.content === "string") return [m.content];
   return m.content.filter((b) => b.type === "text").map((b) => String(b.text));
@@ -999,6 +1237,12 @@ createServer((req, res) => {
     const estrazione = /\[estrazione:(\w+)\]/.exec(testi(ultimo).join("\n"))?.[1];
     if (estrazione) {
       void rispondi(res, { json: estrazioneFinta(estrazione) });
+      return;
+    }
+    // Revisione della scheda in chat: copione a parte, con gli strumenti di modifica.
+    const inRevisione = messaggi.some((m) => m.role === "user" && testi(m).some((t) => t.includes("revisione della scheda del cantiere")));
+    if (inRevisione) {
+      void rispondi(res, revisioneFinta(messaggi));
       return;
     }
     const blocchi = typeof ultimo.content === "string" ? [] : ultimo.content;

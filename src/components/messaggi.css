@@ -192,3 +192,61 @@
     height: 88px;
   }
 }
+
+/* Documenti di progetto allegati dall'utente (revisione della scheda) */
+.msg-dl__allegati {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+.msg-dl__allegato {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--nv-line);
+  border-radius: 12px;
+  background: var(--nv-white);
+  font-size: 13px;
+  max-width: 100%;
+}
+.msg-dl__allegato-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Modifiche alla scheda fatte dal Redattore nel turno */
+.modifiche-scheda {
+  border: 1px solid var(--nv-line);
+  border-left: 3px solid var(--nv-mint-dark);
+  border-radius: 10px;
+  background: var(--nv-white);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.modifiche-scheda__titolo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nv-mint-ink);
+}
+.modifiche-scheda ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.modifiche-scheda__altre {
+  align-self: flex-start;
+}

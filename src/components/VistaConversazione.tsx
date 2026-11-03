@@ -1,7 +1,7 @@
 // Conversazione con il Redattore e, a destra, la bozza aperta.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { MODALITA_FOTO, nomeModalita, tipoDocumento } from "../../shared/documenti";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { MODALITA_FOTO, MODALITA_REVISIONE, nomeModalita, tipoDocumento } from "../../shared/documenti";
 import type { Documento, FirmaApposta, Parziale, RifDocumento } from "../../shared/schema";
 import type { StatoDocumento } from "../../shared/versioni";
 import { dataCompleta } from "../lib/date";
@@ -23,6 +23,11 @@ import type { Azione } from "./parti/Parti";
 import { SceltaCantiere } from "./SceltaCantiere";
 import { SceltaRiprese } from "./SceltaRiprese";
 
+const PannelloScheda = lazy(() => import("./cantiere/PannelloScheda"));
+
+/** Sullo schermo largo la scheda sta accanto alla chat; su telefono e tablet si apre a richiesta. */
+const schermoLargo = () => typeof window !== "undefined" && window.matchMedia("(min-width: 1101px)").matches;
+
 type Pannello = RifDocumento | "in_scrittura" | null;
 
 interface Props {
@@ -32,20 +37,24 @@ interface Props {
   onApriMenu: () => void;
   onNuovo: () => void;
   onPannello: (aperto: boolean) => void;
+  /** Rende questo il cantiere scelto e torna alla home, per iniziare un report. */
+  onUsaCantiere: (cantiereId: string) => void;
 }
 
-export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo, onPannello }: Props) {
+export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo, onPannello, onUsaCantiere }: Props) {
   const stato = useConversazione(id);
   const [pannello, setPannello] = useState<Pannello>(null);
   const [chiusoNelTurno, setChiusoNelTurno] = useState(false);
   const [condiviso, setCondiviso] = useState(false);
   const [ripreseAperte, setRipreseAperte] = useState(false);
+  const [schedaAperta, setSchedaAperta] = useState(schermoLargo);
   const scorrimento = useRef<HTMLDivElement>(null);
   const inFondo = useRef(true);
   const composer = useRef<ComposerHandle>(null);
 
   const conv = stato?.conversazione ?? null;
   const turno = stato?.turno ?? null;
+  const revisione = conv?.modalita === MODALITA_REVISIONE.id;
   const nowvision = useNowVision(conv?.cantiereId ?? "");
   const documenti = useMemo(
     () => (conv ? documentiDi(conv) : new Map<string, DocumentoConversazione>()),
@@ -81,7 +90,7 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
     setPannello(rif ?? null);
   }, [turno, ultimo, pannello]);
 
-  useEffect(() => onPannello(pannello !== null), [pannello, onPannello]);
+  useEffect(() => onPannello(pannello !== null || (revisione && schedaAperta)), [pannello, onPannello, revisione, schedaAperta]);
   useEffect(() => () => onPannello(false), [onPannello]);
 
   // Segue lo streaming se il DL è già in fondo alla conversazione.
@@ -116,7 +125,9 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
   const tipo = tipoDocumento(conv.modalita);
   const foto = conv.modalita === MODALITA_FOTO.id;
   const haDocumenti = documenti.size > 0;
-  const segnaposto = haDocumenti
+  const segnaposto = revisione
+    ? MODALITA_REVISIONE.segnaposto
+    : haDocumenti
     ? "Chiedi una modifica: «aggiungi che il CSE era presente»"
     : foto
       ? MODALITA_FOTO.segnaposto
@@ -163,9 +174,10 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
     </span>
   );
 
+  const schedaVisibile = revisione && schedaAperta;
   return (
     <div className="vista-conv">
-      <main className={`vista conversazione${documentoAperto ? " conversazione--affiancata" : ""}`}>
+      <main className={`vista conversazione${documentoAperto || schedaVisibile ? " conversazione--affiancata" : ""}`}>
         <header className="testata testata--bordo">
           <button type="button" className="btn-icona testata__menu" aria-label="Apri menu" onClick={onApriMenu}>
             <Icona nome="menu" dimensione={22} />
@@ -176,7 +188,20 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
               {dataCompleta(conv.creataIl)} · {c.breve}
             </span>
           </div>
-          {!documentoAperto && (
+          {revisione && !schedaVisibile && (
+            <div className="testata__destra testata__destra--sempre">
+              <button
+                type="button"
+                className="btn btn--condividi testata__scheda"
+                aria-label="Scheda del cantiere"
+                onClick={() => setSchedaAperta(true)}
+              >
+                <Icona nome="cantiere" dimensione={20} />
+                <span className="testata__scheda-testo">Scheda</span>
+              </button>
+            </div>
+          )}
+          {!documentoAperto && !revisione && (
             <div className="testata__destra">
               <SceltaCantiere cantiereId={conv.cantiereId} breve />
               <button type="button" className="btn btn--condividi" onClick={() => void condividi()}>
@@ -223,14 +248,17 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
             segnaposto={segnaposto}
             inCorso={Boolean(turno)}
             onInterrompi={() => interrompi(id)}
-            onApriRiprese={nowvision.disponibile ? () => setRipreseAperte(true) : undefined}
+            onApriRiprese={nowvision.disponibile && !revisione ? () => setRipreseAperte(true) : undefined}
+            cantiereDocumenti={revisione ? conv.cantiereId : undefined}
             onInvia={(invio) => {
               inFondo.current = true;
               void inviaMessaggio(id, invio);
             }}
           />
           <p className="avvertenza avvertenza--fondo">
-            Il Redattore DL prepara bozze · verifica e firma restano del Direttore dei Lavori
+            {revisione
+              ? "Il Redattore legge i documenti e propone · la scheda la confermi tu"
+              : "Il Redattore DL prepara bozze · verifica e firma restano del Direttore dei Lavori"}
           </p>
         </div>
       </main>
@@ -250,6 +278,20 @@ export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo,
             setPannello(null);
           }}
         />
+      )}
+      {schedaVisibile && (
+        <Suspense fallback={null}>
+          <PannelloScheda
+            cantiereId={conv.cantiereId}
+            onInvia={(testo) => {
+              inFondo.current = true;
+              void inviaMessaggio(id, { testo, foto: [], anteprime: [] });
+              if (!schermoLargo()) setSchedaAperta(false);
+            }}
+            onUsa={onUsaCantiere}
+            onChiudi={() => setSchedaAperta(false)}
+          />
+        </Suspense>
       )}
       {ripreseAperte && nowvision.sintesi && (
         <SceltaRiprese

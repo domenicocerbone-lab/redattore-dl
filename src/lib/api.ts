@@ -78,6 +78,8 @@ export const api = {
   rileggiDocumento: (id: string, documento: string) =>
     json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/documenti/${documento}/rileggi`, {})),
   tabelleCantiere: (id: string) => json<TabelleCantiere>(fetch(`/api/cantieri/${id}/tabelle`)),
+  revisioneCantiere: (id: string) =>
+    json<{ conversazione: Conversazione; nuova: boolean }>(invia("POST", `/api/cantieri/${id}/revisione`, {})),
   proponiZone: (id: string) => json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/zone/proponi`, {})),
   firma: () => json<FirmaProfilo | null>(fetch("/api/profilo/firma")),
   salvaFirma: (dati: { immagine?: string; nome: string; titolo: string; albo: string }) =>

@@ -11,6 +11,7 @@ import type {
   Parziale,
   RifDocumento,
 } from "../../shared/schema";
+import { MODALITA_REVISIONE } from "../../shared/documenti";
 import { statoVersione } from "../../shared/versioni";
 import { api } from "../lib/api";
 import { durata } from "../lib/dettatura";
@@ -80,6 +81,17 @@ function MessaggioDelDL({ m, segnalazioni }: { m: MessaggioUtente; segnalazioni:
         </span>
       )}
       {m.foto.length > 0 && <Foto foto={m.foto} segnalazioni={segnalazioni} />}
+      {m.allegati && m.allegati.length > 0 && (
+        <ul className="msg-dl__allegati">
+          {m.allegati.map((a) => (
+            <li key={a.id} className="msg-dl__allegato">
+              <Icona nome="documento" dimensione={16} />
+              <span className="msg-dl__allegato-nome">{a.nome}</span>
+              <span className="etichetta-mono">{a.tipo}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {m.testo && <div className="bolla">{m.testo}</div>}
     </div>
   );
@@ -90,12 +102,13 @@ const FASI: Record<FaseTurno, string> = {
   ragiona: "Sto ragionando",
   calcola: "Sto facendo i calcoli",
   scrive: "Sto scrivendo",
+  legge: "Leggo i documenti che mi hai mandato",
 };
 
-function Fase({ fase }: { fase: FaseTurno }) {
+function Fase({ fase, revisione }: { fase: FaseTurno; revisione: boolean }) {
   return (
     <span className="fase" role="status">
-      {FASI[fase]}
+      {revisione && fase === "calcola" ? "Aggiorno la scheda" : FASI[fase]}
       <span className="fase__puntini" aria-hidden="true">
         <span />
         <span />
@@ -175,6 +188,30 @@ function Strumenti({
   );
 }
 
+/** Cosa il Redattore ha cambiato nella scheda del cantiere in questo turno. */
+function ModificheScheda({ modifiche }: { modifiche: string[] }) {
+  const [tutte, setTutte] = useState(false);
+  const visibili = tutte ? modifiche : modifiche.slice(0, 5);
+  return (
+    <div className="modifiche-scheda">
+      <span className="etichetta-mono modifiche-scheda__titolo">
+        <Icona nome="spunta" dimensione={14} tratto={2} />
+        Scheda aggiornata
+      </span>
+      <ul>
+        {visibili.map((x, i) => (
+          <li key={i}>{x}</li>
+        ))}
+      </ul>
+      {modifiche.length > 5 && (
+        <button type="button" className="btn btn--piccolo modifiche-scheda__altre" onClick={() => setTutte((t) => !t)}>
+          {tutte ? "Mostra meno" : `Altre ${modifiche.length - 5}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function RispostaDelRedattore({
   parti,
   ctx,
@@ -235,6 +272,7 @@ export function Messaggi(p: Props) {
             parti={m.parti}
             ctx={{ ...ctxBase, attiva: i === indiceUltimo && !p.turno }}
           >
+            {m.modificheScheda && m.modificheScheda.length > 0 && <ModificheScheda modifiche={m.modificheScheda} />}
             {m.errore && (
               <div className="msg-errore" role="alert">
                 <span>{m.errore}</span>
@@ -260,7 +298,9 @@ export function Messaggi(p: Props) {
       {p.inAttesa && <MessaggioDelDL m={p.inAttesa} segnalazioni={segnalazioni} />}
       {p.turno && (
         <RispostaDelRedattore parti={p.turno.parti} ctx={{ ...ctxBase, attiva: false, inScrittura: true }}>
-          {(p.turno.parti.length === 0 || p.turno.fase === "calcola") && <Fase fase={p.turno.fase} />}
+          {(p.turno.parti.length === 0 || p.turno.fase === "calcola" || p.turno.fase === "legge") && (
+            <Fase fase={p.turno.fase} revisione={p.conversazione.modalita === MODALITA_REVISIONE.id} />
+          )}
         </RispostaDelRedattore>
       )}
       {p.errore && !p.turno && (

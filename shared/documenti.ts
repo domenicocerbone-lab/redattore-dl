@@ -197,6 +197,15 @@ export const MODALITA_FOTO = {
   segnaposto: "Aggiungi contesto: «in F4 è il bagno 1.3»…",
 };
 
+/** Modalità speciale: revisione della scheda del cantiere in chat, dopo la lettura dei documenti. */
+export const MODALITA_REVISIONE = {
+  id: "revisione_cantiere",
+  nome: "Revisione della scheda",
+  breve: "Revisione scheda",
+  icona: "righe" as IconaDocumento,
+  segnaposto: "Rispondi o correggi: «il CSE è il geom. Bianchi»…",
+};
+
 export const ID_TIPI = TIPI_DOCUMENTO.map((t) => t.id) as [string, ...string[]];
 
 export function tipoDocumento(id: string | undefined): TipoDocumento | undefined {
@@ -205,5 +214,6 @@ export function tipoDocumento(id: string | undefined): TipoDocumento | undefined
 
 export function nomeModalita(id: string): string {
   if (id === MODALITA_FOTO.id) return MODALITA_FOTO.nome;
+  if (id === MODALITA_REVISIONE.id) return MODALITA_REVISIONE.nome;
   return tipoDocumento(id)?.nome ?? "Nuovo report";
 }

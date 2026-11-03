@@ -11,6 +11,10 @@ import { datiNowVision } from "./nowvision";
 /** Ciò che uno strumento sa della conversazione in cui viene chiamato. */
 export interface ContestoStrumento {
   cantiereId: string;
+  /** Chi sta usando la conversazione. */
+  personaId?: string;
+  /** Le modifiche alla scheda fatte dagli strumenti, in parole, per il messaggio. */
+  modifiche?: string[];
 }
 
 const MisureInput = z.object({
@@ -43,13 +47,13 @@ const SalInput = z.object({
     .describe("Importo da recuperare in questo SAL; null se non noto o non dovuto"),
 });
 
-interface Strumento<S extends z.ZodType> {
+export interface Strumento<S extends z.ZodType> {
   schema: S;
   definizione: BetaTool;
   esegui: (input: z.infer<S>, contesto: ContestoStrumento) => unknown;
 }
 
-function strumento<S extends z.ZodObject>(
+export function strumento<S extends z.ZodObject>(
   name: string,
   description: string,
   schema: S,
@@ -225,8 +229,17 @@ export const DEFINIZIONI_STRUMENTI: BetaTool[] = Object.values(STRUMENTI).map((s
 
 export type EsitoStrumento = { contenuto: string; errore: boolean };
 
-export async function eseguiStrumento(nome: string, input: unknown, contesto: ContestoStrumento): Promise<EsitoStrumento> {
-  const s = STRUMENTI[nome as keyof typeof STRUMENTI] as Strumento<z.ZodType> | undefined;
+export function eseguiStrumento(nome: string, input: unknown, contesto: ContestoStrumento): Promise<EsitoStrumento> {
+  return eseguiDa(STRUMENTI as Record<string, Strumento<z.ZodType>>, nome, input, contesto);
+}
+
+export async function eseguiDa(
+  strumenti: Record<string, Strumento<z.ZodType>>,
+  nome: string,
+  input: unknown,
+  contesto: ContestoStrumento,
+): Promise<EsitoStrumento> {
+  const s = Object.hasOwn(strumenti, nome) ? strumenti[nome] : undefined;
   if (!s) return { contenuto: `Strumento sconosciuto: ${nome}`, errore: true };
   const verificato = s.schema.safeParse(input);
   if (!verificato.success) {

@@ -211,6 +211,11 @@ function descrivi(e: Evento): string {
     case "firma":
       return e.modalita === "tolta" ? `ha tolto la firma da «${e.dettaglio ?? "documento"}»` : `ha firmato «${e.dettaglio ?? "documento"}»`;
     case "onboarding":
+      if (e.modalita === "creazione") return `ha creato il cantiere «${e.dettaglio ?? ""}»`;
+      if (e.modalita === "conferma") return `ha confermato la scheda del cantiere «${e.dettaglio ?? ""}»`;
+      if (e.modalita === "zone") {
+        return e.esito === "errore" ? `proposta delle zone non riuscita: ${e.dettaglio ?? ""}` : `ha ricevuto la proposta delle zone di «${e.dettaglio ?? ""}»`;
+      }
       return e.esito === "errore"
         ? `lettura non riuscita: ${e.dettaglio ?? "documento"}`
         : `ha fatto leggere ${e.dettaglio ?? "un documento di progetto"}`;

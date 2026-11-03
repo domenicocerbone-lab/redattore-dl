@@ -858,6 +858,110 @@ function generico(tipo: string) {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Estrazioni dei documenti di progetto: un cantiere inventato, «Residenza Esempio».
+
+const campoLetto = (valore: string, pagina: number, certezza: "letto" | "dedotto" | "assente" = "letto") => ({ valore, pagina, certezza });
+const campoNumero = (valore: number | null, pagina: number, certezza: "letto" | "dedotto" | "assente" = "letto") => ({ valore, pagina, certezza });
+
+function estrazioneFinta(obiettivo: string): unknown {
+  switch (obiettivo) {
+    case "generale":
+      return {
+        oggetto_lavori: campoLetto("Nuova costruzione di edificio residenziale di 8 alloggi con autorimessa interrata", 1),
+        indirizzo: campoLetto("Via Roma 12, Esempio (MI)", 1),
+        appalto: { valore: "privato", pagina: 1, certezza: "letto" },
+        cig: campoLetto("", 0, "assente"),
+        cup: campoLetto("", 0, "assente"),
+        soggetti: [
+          { ruolo: "Committente", nome: "Immobiliare Esempio S.r.l.", dettagli: "Via Verdi 3, Esempio", pagina: 1, certezza: "letto" },
+          { ruolo: "Impresa esecutrice", nome: "Costruzioni Esempio S.p.A.", dettagli: "P.IVA 01234567890", pagina: 1, certezza: "letto" },
+          { ruolo: "Direttore dei Lavori", nome: "Ing. Marco Esempio", dettagli: "", pagina: 2, certezza: "letto" },
+          { ruolo: "CSE", nome: "Geom. Laura Esempio", dettagli: "", pagina: 2, certezza: "dedotto" },
+        ],
+        contratto: {
+          importo: campoNumero(1850000, 3),
+          oneri_sicurezza: campoNumero(42000, 3),
+          ribasso_percentuale: campoNumero(null, 0, "assente"),
+          ritenuta_percentuale: campoNumero(0.5, 4, "dedotto"),
+        },
+        date: {
+          consegna_lavori: campoLetto("2026-03-02", 4),
+          durata_giorni: campoNumero(540, 4),
+          ultimazione_prevista: campoLetto("2027-08-24", 4, "dedotto"),
+        },
+        lavorazioni: [
+          { categoria: "Opere strutturali", descrizione: "Fondazioni e strutture in c.a. dell'interrato e dei piani fuori terra", pagina: 5 },
+          { categoria: "Opere edili", descrizione: "Tamponamenti in laterizio e tramezzature", pagina: 5 },
+          { categoria: "Impianti", descrizione: "Impianti idrico-sanitari, termici ed elettrici degli alloggi", pagina: 6 },
+          { categoria: "Coperture", descrizione: "Copertura piana con impermeabilizzazione e isolamento", pagina: 6 },
+        ],
+        riepilogo: "Contratto d'appalto per la nuova costruzione di Residenza Esempio.",
+      };
+    case "voci": {
+      const voce = (wbs: string, descrizione: string, unita: string, quantita: number, prezzo: number, zona: string, categoria: string) => ({
+        wbs,
+        descrizione,
+        unita,
+        quantita,
+        prezzo,
+        importo: Math.round(quantita * prezzo * 100) / 100,
+        zona,
+        categoria,
+      });
+      return {
+        voci: [
+          voce("1.01", "Scavo di sbancamento", "m³", 1850, 9.5, "Interrato", "Scavi e fondazioni"),
+          voce("1.02", "Platea di fondazione in c.a. C30/37", "m³", 420, 165, "Interrato", "Scavi e fondazioni"),
+          voce("2.01", "Pilastri e travi in c.a. piano terra", "m³", 96, 310, "Piano terra", "Strutture"),
+          voce("2.02", "Solaio in latero-cemento piano primo", "m²", 640, 58, "Piano primo", "Strutture"),
+          voce("3.01", "Tamponamento in blocchi di laterizio 30 cm, piano terra", "m²", 520, 64, "Piano terra", "Opere edili"),
+          voce("3.02", "Tamponamento in blocchi di laterizio 30 cm, piano primo", "m²", 540, 64, "Piano primo", "Opere edili"),
+          voce("4.01", "Impermeabilizzazione della copertura piana", "m²", 610, 38, "Copertura", "Coperture"),
+          voce("5.01", "Allacci alle reti pubbliche", "a corpo", 1, 18500, "", "Impianti"),
+        ],
+        riepilogo: "Computo metrico estimativo di Residenza Esempio.",
+      };
+    }
+    case "attivita":
+      return {
+        attivita: [
+          { wbs: "A1", descrizione: "Scavi e fondazioni", zona: "Interrato", inizio_previsto: "2026-03-02", fine_prevista: "2026-05-15" },
+          { wbs: "A2", descrizione: "Strutture in elevazione", zona: "Piano terra", inizio_previsto: "2026-05-18", fine_prevista: "2026-09-30" },
+          { wbs: "A3", descrizione: "Tamponamenti", zona: "Piano primo", inizio_previsto: "2026-10-01", fine_prevista: "2027-01-29" },
+          { wbs: "A4", descrizione: "Copertura", zona: "Copertura", inizio_previsto: "2026-11-02", fine_prevista: "2026-12-18" },
+        ],
+        riepilogo: "Cronoprogramma dei lavori.",
+      };
+    case "ambienti":
+      return {
+        ambienti: [
+          { nome: "Autorimessa interrata", piano: "Interrato", tipo: "parti_comuni", pagina: 1 },
+          { nome: "Alloggi A-01 e A-02", piano: "Piano terra", tipo: "unita", pagina: 2 },
+          { nome: "Alloggi A-03 e A-04", piano: "Piano primo", tipo: "unita", pagina: 3 },
+          { nome: "Vano scala", piano: "Tutti i piani", tipo: "parti_comuni", pagina: 2 },
+          { nome: "Copertura piana", piano: "Copertura", tipo: "struttura", pagina: 4 },
+        ],
+        riepilogo: "Piante dei piani interrato, terra, primo e copertura.",
+      };
+    case "zone":
+      return {
+        zone: [
+          { nome: "Interrato", piano: "Interrato", tipo: "parti_comuni", voci: ["1.01", "1.02"], attivita: ["A1"], ambiente: "Autorimessa interrata", note: "Autorimessa e fondazioni.", certezza: "letto" },
+          { nome: "Piano terra", piano: "Piano terra", tipo: "unita", voci: ["2.01", "3.01"], attivita: ["A2"], ambiente: "Alloggi A-01 e A-02", note: "", certezza: "letto" },
+          { nome: "Piano primo", piano: "Piano primo", tipo: "unita", voci: ["2.02", "3.02"], attivita: ["A3"], ambiente: "Alloggi A-03 e A-04", note: "", certezza: "letto" },
+          { nome: "Copertura", piano: "Copertura", tipo: "struttura", voci: ["4.01"], attivita: ["A4"], ambiente: "Copertura piana", note: "", certezza: "letto" },
+          { nome: "Vano scala", piano: "Tutti i piani", tipo: "parti_comuni", voci: [], attivita: [], ambiente: "Vano scala", note: "Nessuna voce dedicata nel computo.", certezza: "dedotto" },
+        ],
+        voci_senza_zona: ["5.01"],
+        decisioni: [{ domanda: "Segui gli alloggi uno per uno o per piano?", opzioni: ["Uno per uno", "Per piano"] }],
+        riepilogo: "Cinque zone dai piani dell'edificio.",
+      };
+    default:
+      return {};
+  }
+}
+
 function testi(m: Messaggio): string[] {
   if (typeof m.content === "string") return [m.content];
   return m.content.filter((b) => b.type === "text").map((b) => String(b.text));
@@ -888,6 +992,12 @@ createServer((req, res) => {
     jsonInRecinto = RIFIUTA_SCHEMA && !richiesta.output_config?.format;
     const messaggi = richiesta.messages;
     const ultimo = messaggi.at(-1)!;
+    // Onboarding: lettura dei documenti di progetto (cantiere inventato).
+    const estrazione = /\[estrazione:(\w+)\]/.exec(testi(ultimo).join("\n"))?.[1];
+    if (estrazione) {
+      void rispondi(res, { json: estrazioneFinta(estrazione) });
+      return;
+    }
     const blocchi = typeof ultimo.content === "string" ? [] : ultimo.content;
 
     const risultato = blocchi.find((b) => b.type === "tool_result");

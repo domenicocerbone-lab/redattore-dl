@@ -162,6 +162,34 @@
   border: 1px solid var(--nv-line);
 }
 
+/* Scheda del cantiere ancora in bozza. */
+.home__avviso {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--nv-orange-line);
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-orange-tint);
+  color: var(--nv-ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+.home__avviso > span:nth-child(2) {
+  flex: 1 1 260px;
+}
+.home__avviso-azione {
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+a.btn {
+  text-decoration: none;
+}
+
 /* Bozze da chiudere: le ultime tre del cantiere, sotto i tipi di documento. */
 .home__bozze {
   width: 100%;

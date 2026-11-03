@@ -8,7 +8,7 @@ import type {
   Salute,
 } from "../../shared/api";
 import type { DatiPersona, EventoInterfaccia, FirmaProfilo, Persona, RiepilogoUtilizzo } from "../../shared/accessi";
-import type { Cantiere, CantiereBreve, SchedaCantiere, TipoDocumentoProgetto } from "../../shared/cantieri";
+import type { Cantiere, CantiereBreve, SchedaCantiere, TabelleCantiere, TipoDocumentoProgetto } from "../../shared/cantieri";
 import type { Ripresa, SintesiNowVision } from "../../shared/nowvision";
 import type { Conversazione, ConversazioneMeta, FirmaApposta, ModificaManuale, StatoVersione } from "../../shared/schema";
 import type { VoceArchivio } from "../../shared/versioni";
@@ -77,6 +77,7 @@ export const api = {
     json<SchedaCantiere>(fetch(`/api/cantieri/${id}/documenti/${documento}`, { method: "DELETE" })),
   rileggiDocumento: (id: string, documento: string) =>
     json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/documenti/${documento}/rileggi`, {})),
+  tabelleCantiere: (id: string) => json<TabelleCantiere>(fetch(`/api/cantieri/${id}/tabelle`)),
   proponiZone: (id: string) => json<SchedaCantiere>(invia("POST", `/api/cantieri/${id}/zone/proponi`, {})),
   firma: () => json<FirmaProfilo | null>(fetch("/api/profilo/firma")),
   salvaFirma: (dati: { immagine?: string; nome: string; titolo: string; albo: string }) =>
@@ -176,10 +177,11 @@ export function caricaDocumentoProgetto(
   file: Blob,
   nome: string,
   suAvanzamento: (frazione: number) => void,
+  sostituisce?: string,
 ): Promise<SchedaCantiere> {
   return new Promise((risolvi, rifiuta) => {
     const xhr = new XMLHttpRequest();
-    const q = new URLSearchParams({ tipo, nome });
+    const q = new URLSearchParams({ tipo, nome, ...(sostituisce ? { sostituisce } : {}) });
     xhr.open("POST", `/api/cantieri/${cantiere}/documenti?${q}`);
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
     xhr.upload.onprogress = (e) => e.lengthComputable && suAvanzamento(e.loaded / e.total);

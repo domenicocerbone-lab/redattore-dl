@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { MODALITA_FOTO, TIPI_DOCUMENTO, tipoDocumento } from "../../shared/documenti";
 import { linkDocumento, type VoceArchivio } from "../../shared/versioni";
 import { api } from "../lib/api";
+import { infoCantiere } from "../lib/sessione";
 import { quando } from "../lib/date";
 import { useNowVision } from "../lib/nowvision";
 import { creaConversazione, inviaMessaggio, useElenco, type Invio } from "../lib/stato";
@@ -81,6 +82,34 @@ export function Home({ cantiereId, onCantiere, onApriMenu, onAperta }: Props) {
     </button>
   );
 
+  if (!cantiereId) {
+    return (
+      <main className="vista vista--home">
+        <header className="testata">
+          <div className="testata__sinistra">
+            <button type="button" className="btn-icona testata__menu" aria-label="Apri menu" onClick={onApriMenu}>
+              <Icona nome="menu" dimensione={22} />
+            </button>
+          </div>
+        </header>
+        <div className="home">
+          <div className="home__intro">
+            <span className="pillola-vetro">Primo passo</span>
+            <h1>Crea il tuo primo cantiere</h1>
+            <p>
+              Carica contratto, computo, cronoprogramma e planimetrie: il Redattore ne ricava soggetti, importi, programma e
+              zone, e li usa in ogni documento che prepari.
+            </p>
+          </div>
+          <a className="btn btn--primario" href="#/cantieri/nuovo">
+            Nuovo cantiere
+          </a>
+        </div>
+      </main>
+    );
+  }
+  const info = infoCantiere(cantiereId);
+
   return (
     <main className="vista vista--home">
       <header className="testata">
@@ -114,6 +143,13 @@ export function Home({ cantiereId, onCantiere, onApriMenu, onAperta }: Props) {
       </header>
 
       <div className="home">
+        {info.stato === "bozza" && (
+          <a className="home__avviso" href={`#/cantieri/${cantiereId}`}>
+            <Icona nome="attenzione" dimensione={18} colore="var(--nv-orange-ink)" />
+            <span>La scheda di questo cantiere è da completare: carica i documenti di progetto e conferma i dati.</span>
+            <span className="home__avviso-azione">Completa la scheda →</span>
+          </a>
+        )}
         <div className="home__intro">
           <span className="pillola-vetro">Racconta. Verifica. Firma.</span>
           <h1>Cosa verbalizziamo oggi?</h1>

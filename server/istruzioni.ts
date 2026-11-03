@@ -100,7 +100,10 @@ function schedaConfermata(c: SchedaCantiere): string {
     righe.push(
       ...c.zone
         .slice(0, 60)
-        .map((z) => `- ${z.nome}${z.piano ? ` · ${z.piano}` : ""} · ${NOMI_TIPO_ZONA[z.tipo]} · ${z.vociComputo.length} voci · ${z.attivita.length} attività`),
+        .map(
+          (z) =>
+            `- ${z.nome}${z.piano ? ` · ${z.piano}` : ""} · ${NOMI_TIPO_ZONA[z.tipo]} · ${z.vociComputo.length} ${z.vociComputo.length === 1 ? "voce" : "voci"} · ${z.attivita.length} attività`,
+        ),
     );
     if (c.zone.length > 60) righe.push(`- … altre ${c.zone.length - 60} zone`);
   }

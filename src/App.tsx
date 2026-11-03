@@ -11,6 +11,7 @@ import { caricaSessione, cantieriConsentiti, suSessioneScaduta } from "./lib/ses
 const Admin = lazy(() => import("./components/admin/Admin"));
 const PaginaDocumenti = lazy(() => import("./components/documenti/PaginaDocumenti"));
 const PaginaProfilo = lazy(() => import("./components/profilo/PaginaProfilo"));
+const PaginaCantiere = lazy(() => import("./components/cantiere/PaginaCantiere"));
 
 const CHIAVE_CANTIERE = "redattore-dl.cantiere";
 
@@ -19,6 +20,7 @@ type Vista =
   | { tipo: "admin" }
   | { tipo: "documenti" }
   | { tipo: "profilo" }
+  | { tipo: "cantiere"; id: string }
   | { tipo: "conversazione"; id: string; documento: RifDocumento | null };
 
 /** #/c/<conversazione>[/d/<documento>/<versione>], #/documenti, #/profilo, #/admin. */
@@ -27,6 +29,8 @@ function leggiRotta(): Vista {
   if (h.startsWith("#/admin")) return { tipo: "admin" };
   if (h.startsWith("#/documenti")) return { tipo: "documenti" };
   if (h.startsWith("#/profilo")) return { tipo: "profilo" };
+  const cantiere = /^#\/cantieri\/([\w-]+)/.exec(h);
+  if (cantiere) return { tipo: "cantiere", id: cantiere[1] };
   const m = /^#\/c\/([\w-]+)(?:\/d\/([\w-]+)\/(\d+))?/.exec(h);
   if (m) return { tipo: "conversazione", id: m[1], documento: m[2] ? { id: m[2], versione: Number(m[3]) } : null };
   return { tipo: "home" };
@@ -58,13 +62,6 @@ export function App() {
 
   if (stato === "carico") return null;
   if (stato === "fuori") return <Accesso onEntrato={verifica} />;
-  if (cantieriConsentiti().length === 0) {
-    return (
-      <main className="vista__vuota" style={{ minHeight: "100dvh" }}>
-        <p>Non hai ancora nessun cantiere assegnato. Chiedi a chi ti ha invitato di abilitarne uno.</p>
-      </main>
-    );
-  }
   return <Redattore />;
 }
 
@@ -142,10 +139,19 @@ function Redattore() {
             locale, tra le variabili del servizio online) e riavvia il server.
           </div>
         )}
-        {vista.tipo === "documenti" || vista.tipo === "profilo" ? (
+        {vista.tipo === "documenti" || vista.tipo === "profilo" || vista.tipo === "cantiere" ? (
           <Suspense fallback={null}>
             {vista.tipo === "documenti" ? (
               <PaginaDocumenti onApriMenu={() => setMenuMobile(true)} />
+            ) : vista.tipo === "cantiere" ? (
+              <PaginaCantiere
+                id={vista.id}
+                onApriMenu={() => setMenuMobile(true)}
+                onUsa={(id) => {
+                  cambiaCantiere(id);
+                  vai(null);
+                }}
+              />
             ) : (
               <PaginaProfilo onApriMenu={() => setMenuMobile(true)} />
             )}

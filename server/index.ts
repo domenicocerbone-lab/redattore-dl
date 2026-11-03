@@ -45,7 +45,7 @@ import {
   urlFoto,
   type ConversazioneSalvata,
 } from "./archivio";
-import { TIPI_DOCUMENTO_PROGETTO, eScheda, type TipoDocumentoProgetto } from "../shared/cantieri";
+import { TIPI_DOCUMENTO_PROGETTO, eScheda, type TabelleCantiere, type TipoDocumentoProgetto } from "../shared/cantieri";
 import {
   aggiornaScheda,
   breveCantiere,
@@ -61,7 +61,7 @@ import { aggiungiDocumento, eliminaDocumento, fileDocumento, proponiZone, ripren
 import { caricaFirme, eliminaFirma, fileFirma, firmaComeDataUrl, firmaDi, salvaFirma, type DatiFirma } from "./firme";
 import { impronteScheda, promptDiSistema } from "./istruzioni";
 import { PdfNonDisponibile, paginaDocumento, pdfConCache } from "./pdf";
-import { eliminaRipresa, fileRipresa, salvaFile, salvaRipresa, seminaEsempi, sintesi } from "./nowvision";
+import { datiNowVision, eliminaRipresa, fileRipresa, salvaFile, salvaRipresa, seminaEsempi, sintesi } from "./nowvision";
 import {
   MODELLO,
   aggiungiMessaggioUtente,
@@ -514,7 +514,7 @@ app.post("/api/cantieri", asincrono(async (req, res) => {
   try {
     const s = await creaCantiere(String(req.body?.nome ?? ""), p.id);
     await aggiungiCantiere(p.id, s.id);
-    void registra({ persona: p.id, tipo: "onboarding", cantiere: s.id, esito: "ok", dettaglio: `il nuovo cantiere «${s.nome}»` });
+    void registra({ persona: p.id, tipo: "onboarding", cantiere: s.id, esito: "ok", modalita: "creazione", dettaglio: s.nome });
     res.json(s);
   } catch (e) {
     res.status(400).json({ errore: (e as Error).message });
@@ -559,7 +559,7 @@ app.post("/api/cantieri/:cantiere/conferma", asincrono(async (req, res) => {
   if (!s) return;
   try {
     const confermata = await confermaScheda(s.id);
-    void registra({ persona: personaDella(res).id, tipo: "onboarding", cantiere: s.id, esito: "ok", dettaglio: `la conferma della scheda di «${s.nome}»` });
+    void registra({ persona: personaDella(res).id, tipo: "onboarding", cantiere: s.id, esito: "ok", modalita: "conferma", dettaglio: s.nome });
     res.json(confermata);
   } catch (e) {
     res.status(400).json({ errore: (e as Error).message });
@@ -619,6 +619,18 @@ app.get("/api/cantieri/:cantiere/documenti/:documento/file", (req, res) => {
     if (e && !res.headersSent) res.status(404).end();
   });
 });
+
+/** Voci di computo e attività del programma in forma leggera, per la revisione delle zone. */
+app.get("/api/cantieri/:cantiere/tabelle", asincrono(async (req, res) => {
+  const s = schedaSua(req, res);
+  if (!s) return;
+  const nv = await datiNowVision(s.id);
+  const tabelle: TabelleCantiere = {
+    voci: (nv.computo?.voci ?? []).slice(0, 3000).map((v) => ({ wbs: v.wbs, descrizione: v.descrizione.slice(0, 200), unita: v.unita, quantita: v.quantita, importo: v.importo, zone: v.zone })),
+    attivita: (nv.programma?.attivita ?? []).slice(0, 1000).map((a) => ({ wbs: a.wbs, descrizione: a.descrizione.slice(0, 200), inizio: a.inizioPrevisto, fine: a.finePrevista, zone: a.zone })),
+  };
+  res.json(tabelle);
+}));
 
 app.post("/api/cantieri/:cantiere/zone/proponi", (req, res) => {
   const s = schedaSua(req, res);
@@ -748,12 +760,13 @@ app.post("/api/admin/persone/:id/revoca", gestisci((req) => revoca(req.params.id
 
 async function avvia() {
   await preparaCartelle();
+  // Prima i dati di esempio: così Residenze Incanto, se ha dati NowVision, diventa subito un cantiere vero.
+  await seminaEsempi();
   await caricaCantieri();
   await caricaAccessi();
   await riprendiLetture();
   await caricaFirme();
   await caricaEventi();
-  await seminaEsempi();
   if (PRODUZIONE) {
     const dist = path.resolve("dist");
     app.use(express.static(dist, { index: false }));

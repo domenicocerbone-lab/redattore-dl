@@ -16,7 +16,7 @@ interface Props {
   apertaSuMobile: boolean;
   idAttivo: string | null;
   /** Pagina aperta, per evidenziare la voce giusta. */
-  sezione: "home" | "conversazione" | "documenti" | "profilo";
+  sezione: "home" | "conversazione" | "documenti" | "profilo" | "cantiere";
   cantiereId: string;
   onCompatta: (compatta: boolean) => void;
   onChiudiMobile: () => void;
@@ -125,23 +125,51 @@ export function Sidebar(p: Props) {
         )
       }
     >
-      {(chiudi) =>
-        cantieriConsentiti().map((c) => (
+      {(chiudi) => (
+        <>
+          {cantieriConsentiti().map((c) => (
+            <VoceMenu
+              key={c.id}
+              attiva={c.id === p.cantiereId}
+              onClick={() => {
+                p.onCantiere(c.id);
+                chiudi();
+              }}
+            >
+              <span className="voce-cantiere">
+                <span>
+                  {c.nome}
+                  {c.stato === "bozza" && " · scheda da completare"}
+                </span>
+                <span className="etichetta-mono">{c.indirizzo}</span>
+              </span>
+            </VoceMenu>
+          ))}
+          <div className="menu__separatore" />
+          {cantieriConsentiti().some((c) => c.id === p.cantiereId && c.stato !== "esempio") && (
+            <VoceMenu
+              onClick={() => {
+                chiudi();
+                p.onChiudiMobile();
+                window.location.hash = `#/cantieri/${p.cantiereId}`;
+              }}
+            >
+              <Icona nome="documento" dimensione={16} />
+              Scheda del cantiere
+            </VoceMenu>
+          )}
           <VoceMenu
-            key={c.id}
-            attiva={c.id === p.cantiereId}
             onClick={() => {
-              p.onCantiere(c.id);
               chiudi();
+              p.onChiudiMobile();
+              window.location.hash = "#/cantieri/nuovo";
             }}
           >
-            <span className="voce-cantiere">
-              <span>{c.nome}</span>
-              <span className="etichetta-mono">{c.indirizzo}</span>
-            </span>
+            <Icona nome="piu" dimensione={16} />
+            Nuovo cantiere
           </VoceMenu>
-        ))
-      }
+        </>
+      )}
     </Menu>
   );
 

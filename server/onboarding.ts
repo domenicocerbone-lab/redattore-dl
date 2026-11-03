@@ -188,6 +188,7 @@ async function esegui(cantiereId: string, documentoId: string) {
     tipo: "onboarding",
     cantiere: s.id,
     esito: d.stato === "letto" ? "ok" : "errore",
+    modalita: "lettura",
     dettaglio: `${NOMI_DOCUMENTO_PROGETTO[d.tipo].toLowerCase()} «${d.nome}»${d.errore ? `: ${d.errore}` : ""}`,
     costo: consumo.costo,
     durataMs: Date.now() - inizio,
@@ -686,6 +687,9 @@ async function sostituisciVecchio(s: SchedaCantiere, d: DocumentoProgetto) {
   const prima = await leggiEstratti(s, vecchio);
   const dopo = await leggiEstratti(s, d);
   d.differenze = confronta(prima, dopo);
+  if (s.zone.length && (dopo.voci || dopo.attivita) && !d.differenze[0]?.startsWith("Nessuna")) {
+    d.differenze.push("le zone collegano ancora i codici della versione precedente: rifai la proposta delle zone o correggile");
+  }
   s.documenti = s.documenti.filter((x) => x.id !== vecchio.id);
   await fs.rm(fileEstratti(s, vecchio), { force: true });
 }
@@ -836,7 +840,8 @@ export async function proponiZone(s: SchedaCantiere, personaId: string) {
     tipo: "onboarding",
     cantiere: s.id,
     esito: errore ? "errore" : "ok",
-    dettaglio: `la proposta delle zone di «${s.nome}»${errore ? `: ${errore}` : ""}`,
+    modalita: "zone",
+    dettaglio: errore ? `${s.nome}: ${errore}` : s.nome,
     costo: consumo.costo,
     durataMs: Date.now() - inizio,
     modello: consumo.modello || undefined,

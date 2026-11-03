@@ -1,0 +1,585 @@
+/* Scheda del cantiere e onboarding dai documenti di progetto. Pensata prima per il telefono. */
+
+.cantiere {
+  background: var(--nv-paper);
+  min-height: 100dvh;
+}
+.cantiere__testata {
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.cantiere__titolo {
+  margin: 0;
+  padding: 0 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cantiere__corpo {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Messaggio del Redattore e creazione */
+.cantiere__bolla {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.cantiere__bolla p {
+  margin: 0;
+  max-width: 600px;
+}
+.cantiere__marchio {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-ink);
+  color: var(--nv-mint);
+}
+.cantiere__nuovo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+  padding-left: 44px;
+}
+.cantiere__nuovo .btn {
+  align-self: flex-start;
+}
+
+/* Passi dell'onboarding */
+.cantiere__passi {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cantiere__passo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px 0 6px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: 999px;
+  background: var(--nv-white);
+  font-size: 14px;
+  color: var(--nv-ink-soft);
+}
+.cantiere__passo--attuale {
+  border-color: var(--nv-ink);
+  color: var(--nv-ink);
+  font-weight: 500;
+}
+.cantiere__passo-numero {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--nv-sand);
+  font-family: var(--nv-font-mono);
+  font-size: 12px;
+}
+.cantiere__passo--attuale .cantiere__passo-numero {
+  background: var(--nv-accent);
+}
+.cantiere__avanti {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cantiere__avanti .btn--primario {
+  margin-left: auto;
+}
+.cantiere__schede {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.cantiere__usa {
+  margin-left: auto;
+}
+
+/* Sezioni */
+.cantiere__sezione {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-white);
+}
+.cantiere__sezione-testa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.cantiere__sottotitolo {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+}
+.cantiere__titoletto {
+  margin: 8px 0 0;
+  font-family: var(--nv-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--nv-ink-soft);
+}
+.cantiere__nota,
+.cantiere__aiuto {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--nv-ink-soft);
+}
+.cantiere__aiuto {
+  font-size: 13.5px;
+}
+.cantiere__errore {
+  margin: 0;
+  color: var(--nv-orange-ink);
+  font-size: 14px;
+}
+.cantiere__lavoro {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Documenti */
+.cantiere__tipo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--nv-line-faint);
+}
+.cantiere__tipo-testa {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cantiere__tipo-nome strong {
+  font-weight: 500;
+}
+.cantiere__tipo-testa label.btn {
+  cursor: pointer;
+}
+.cantiere__documenti {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.documento-progetto {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-paper);
+}
+.documento-progetto--errore {
+  border-color: var(--nv-orange-line);
+  background: var(--nv-orange-tint);
+}
+.documento-progetto__icona {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--nv-r-sm);
+  background: var(--nv-white);
+  color: var(--nv-ink-soft);
+}
+.documento-progetto--letto .documento-progetto__icona {
+  background: var(--nv-mint-soft);
+  color: var(--nv-mint-ink);
+}
+.documento-progetto__testo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+}
+.documento-progetto__nome {
+  color: var(--nv-ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+a.documento-progetto__nome {
+  text-decoration: none;
+}
+a.documento-progetto__nome:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.documento-progetto__dettagli {
+  font-size: 12.5px;
+  color: var(--nv-ink-soft);
+}
+.documento-progetto__stato {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--nv-ink);
+}
+.documento-progetto--errore .documento-progetto__stato {
+  color: var(--nv-orange-ink);
+}
+.documento-progetto__differenze {
+  margin-top: 4px;
+  padding: 6px 8px;
+  border-radius: var(--nv-r-sm);
+  background: var(--nv-peri-soft);
+  color: var(--nv-peri-ink);
+  font-size: 13px;
+}
+.documento-progetto__punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--nv-mint-dark);
+  animation: pulsa 1.4s ease-in-out infinite;
+}
+.documento-progetto__barra {
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--nv-sand);
+  overflow: hidden;
+}
+.documento-progetto__barra span {
+  display: block;
+  height: 100%;
+  background: var(--nv-mint-dark);
+  transition: width 200ms linear;
+}
+
+/* Campi */
+.cantiere__griglia {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.cantiere__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.cantiere__campo--largo {
+  grid-column: 1 / -1;
+}
+.cantiere__etichetta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cantiere__campo input,
+.cantiere__campo textarea,
+.cantiere__campo select,
+.cantiere__riga input,
+.zona select,
+.zona input:not([type="checkbox"]) {
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-white);
+  font: inherit;
+  font-size: 14.5px;
+  color: var(--nv-ink);
+}
+.cantiere__campo textarea {
+  height: auto;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.45;
+}
+.cantiere__campo input:focus-visible,
+.cantiere__campo textarea:focus-visible,
+.cantiere__campo select:focus-visible,
+.cantiere__riga input:focus-visible,
+.zona input:focus-visible,
+.zona select:focus-visible {
+  outline: 2px solid var(--nv-mint-dark);
+  outline-offset: 1px;
+}
+.cantiere__campo--dedotto input,
+.cantiere__campo--dedotto textarea,
+.cantiere__campo--dedotto select,
+.cantiere__riga.cantiere__campo--dedotto input {
+  border-color: var(--nv-orange-line);
+  background: var(--nv-orange-tint);
+}
+.chip-fonte {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--nv-r-xs);
+  background: var(--nv-sand);
+  color: var(--nv-ink-soft);
+  font-family: var(--nv-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.chip-fonte--dedotto {
+  background: var(--nv-orange-soft);
+  color: var(--nv-orange-ink);
+}
+
+/* Righe ripetute: soggetti e lavorazioni */
+.cantiere__righe {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cantiere__riga {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+}
+.cantiere__riga:has(.cantiere__riga-largo) {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 2fr) auto auto;
+}
+.cantiere__aggiungi {
+  align-self: flex-start;
+}
+.cantiere__salva {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-ink);
+  color: var(--nv-white);
+  font-size: 14px;
+  box-shadow: var(--nv-shadow-menu);
+}
+.cantiere__salva > span {
+  flex: 1 1 180px;
+}
+.cantiere__salva .cantiere__errore {
+  color: var(--nv-orange);
+}
+.cantiere__salva .btn:not(.btn--primario) {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--nv-white);
+}
+
+/* Zone */
+.zone {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.zona {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-paper);
+}
+.zona--dedotta {
+  border-color: var(--nv-orange-line);
+}
+.zona__riga {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.6fr) minmax(0, 0.8fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+.zona__riga input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--nv-mint-ink);
+}
+.zona__conteggi {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 2px 4px 2px 30px;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  color: var(--nv-ink-soft);
+}
+.zona__dettaglio {
+  padding-left: 30px;
+  font-size: 13px;
+  color: var(--nv-ink-soft);
+}
+.zona__dettaglio p {
+  margin: 0 0 6px;
+}
+.zona__dettaglio ul,
+.cantiere__riquadro ul {
+  margin: 0 0 6px;
+  padding-left: 16px;
+}
+.codice {
+  font-family: var(--nv-font-mono);
+  font-size: 12px;
+  color: var(--nv-ink);
+}
+.cantiere__comandi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cantiere__riquadro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-sand);
+  font-size: 14px;
+}
+details.cantiere__riquadro summary {
+  cursor: pointer;
+  font-weight: 500;
+}
+.cantiere__riquadro strong {
+  font-weight: 500;
+}
+.decisione {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.decisione__opzioni {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Conferma */
+.cantiere__controlli {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 15px;
+}
+.cantiere__controlli li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cantiere__controlli li svg {
+  color: var(--nv-mint-ink);
+}
+.cantiere__controllo--manca {
+  color: var(--nv-ink-soft);
+}
+.cantiere__controllo--manca svg {
+  color: var(--nv-ink-soft) !important;
+}
+.cantiere__pronto .btn {
+  align-self: flex-start;
+}
+
+@media (max-width: 720px) {
+  .cantiere__corpo {
+    padding: 16px 16px 56px;
+  }
+  .cantiere__sezione {
+    padding: 14px;
+  }
+  .cantiere__nuovo {
+    padding-left: 0;
+  }
+  .cantiere__griglia {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cantiere__riga,
+  .cantiere__riga:has(.cantiere__riga-largo) {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cantiere__riga input {
+    grid-column: 1;
+  }
+  .cantiere__riga .chip-fonte {
+    grid-column: 1;
+    justify-self: start;
+  }
+  .cantiere__riga .btn-icona {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .zona__riga {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .zona__piano,
+  .zona__riga select {
+    grid-column: 2;
+  }
+  .zona__riga .btn-icona {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .cantiere__passo {
+    padding-right: 10px;
+    font-size: 13px;
+  }
+  .cantiere__usa {
+    margin-left: 0;
+    width: 100%;
+  }
+}

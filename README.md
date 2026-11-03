@@ -34,6 +34,20 @@ La pagina **Utilizzo e accessi** mostra per 7, 30 o 90 giorni: persone attive, r
 
 Il registro è in `<REDATTORE_DATI>/eventi.jsonl`, persone e sessioni in `persone.json` e `sessioni.json` (codici e sessioni salvati solo come hash).
 
+## Cantieri e documenti di progetto
+
+- **Nuovo cantiere** (menu Cantieri o selettore del cantiere in home): nome, poi i documenti di progetto. Una casella per tipo: contratto o capitolato, computo, cronoprogramma, planimetrie, PSC, altro. Formati: PDF, xlsx, csv, JPG/PNG (le immagini grandi si riducono nel browser).
+- **Lettura** in coda sul server (due documenti alla volta; dopo un riavvio riprende):
+  - xlsx nel formato NowVision: letti con i parser esistenti, senza IA;
+  - contratto, PSC, planimetrie e altri documenti: Claude (`REDATTORE_MODELLO`) estrae oggetto dei lavori, indirizzo, appalto, CIG/CUP, soggetti, importi, date, lavorazioni e ambienti, con pagina e certezza («letto» o «dedotto»);
+  - computo e cronoprogramma in altri formati: un modello più economico (`REDATTORE_MODELLO_TABELLE`, predefinito `claude-sonnet-5-5`), a blocchi di righe o di pagine.
+  
+  Alla fine una proposta di **zone** collega voci di computo e attività del programma, con le voci rimaste fuori e le scelte da fare.
+- **Revisione e conferma**: ogni valore mostra il documento e la pagina da cui viene; quelli dedotti sono «da verificare». Il Redattore usa la scheda solo dopo «Conferma la scheda»: soggetti, contratto, lavorazioni e zone entrano nel prompt; computo e programma completi si consultano con gli strumenti `consulta_computo` e `consulta_programma`. Le conversazioni già aperte ricevono la scheda aggiornata al messaggio successivo.
+- **Nuova versione** di un documento (menu ⋯): si rilegge solo quello e si vedono le differenze rispetto alla versione precedente.
+- **Archivio**: schede in `<REDATTORE_DATI>/cantieri/<id>/scheda.json`, originali in `documenti/`, dati letti in `estratti/`; computo e programma ricavati finiscono anche in `nowvision/<id>/` come dati NowVision, così il confronto con le riprese 360° li usa. Il costo di ogni lettura compare in «Utilizzo e accessi».
+- **Esempi**: Lotto B e Scuola Alighieri si vedono solo in demo e in sviluppo. Residenze Incanto, se ha già dati NowVision caricati, diventa un cantiere vero al primo avvio.
+
 ## Documenti, PDF e firma
 
 - **Documenti** (barra laterale, `#/documenti`): tutte le bozze e i documenti ultimati della persona, per mese, con filtri Tutti / Bozze / Ultimati, cantiere, tipo e ricerca. «Apri» porta alla conversazione con il pannello già sulla versione; «PDF» la scarica. L'amministratore può vedere i documenti di tutte le persone. In home, «Bozze da chiudere» mostra le ultime tre del cantiere.
@@ -104,6 +118,6 @@ scripts/      Claude finto per demo e prove dell'interfaccia
 
 ## Da sapere
 
-- L'anagrafica dei cantieri e dell'utente (`shared/cantieri.ts`) è di esempio: in produzione va letta dalla piattaforma NowVision.
+- I cantieri di `shared/cantieri.ts` sono esempi per la demo: online si creano con l'onboarding.
 - In modalità demo il confronto con le riprese NowVision c'è solo per le 5 riprese di esempio di Residenze Incanto, con il report di avanzamento: sono risposte preparate in anticipo sulle riprese e sui file reali. Per qualsiasi altra ripresa serve Claude vero.
 - `npm run demo` usa un server finto (`scripts/claude-finto.ts`) che riconosce solo i casi del design: serve a vedere l'interfaccia, non a valutare il Redattore.

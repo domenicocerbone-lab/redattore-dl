@@ -157,6 +157,12 @@ export interface SchedaCantiere extends Cantiere {
   zoneInPreparazione?: boolean;
 }
 
+/** Computo e programma in forma leggera, per la revisione delle zone nell'interfaccia. */
+export interface TabelleCantiere {
+  voci: { wbs: string; descrizione: string; unita: string; quantita: number | null; importo: number | null; zone: string[] }[];
+  attivita: { wbs: string; descrizione: string; inizio: string | null; fine: string | null; zone: string[] }[];
+}
+
 export function eScheda(c: Cantiere): c is SchedaCantiere {
   return (c as SchedaCantiere).scheda === true;
 }

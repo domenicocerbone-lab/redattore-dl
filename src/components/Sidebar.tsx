@@ -1,4 +1,4 @@
-// Barra laterale: nuovo report, ricerca, cantieri e cronologia.
+// Barra laterale: nuovo report, ricerca, documenti, cantieri e cronologia.
 // Completa (260 px), compatta (64 px) quando il documento è aperto, cassetto su telefono.
 
 import { useEffect, useRef, useState } from "react";
@@ -15,6 +15,8 @@ interface Props {
   compatta: boolean;
   apertaSuMobile: boolean;
   idAttivo: string | null;
+  /** Pagina aperta, per evidenziare la voce giusta. */
+  sezione: "home" | "conversazione" | "documenti" | "profilo";
   cantiereId: string;
   onCompatta: (compatta: boolean) => void;
   onChiudiMobile: () => void;
@@ -36,6 +38,7 @@ function MenuUtente({ compatto }: { compatto: boolean }) {
   const s = sessione();
   if (!s) return null;
   const voci: { testo: string; azione: () => void }[] = [];
+  voci.push({ testo: "Profilo e firma", azione: () => (window.location.hash = "#/profilo") });
   if (s.persona.admin) voci.push({ testo: "Utilizzo e accessi", azione: () => (window.location.hash = "#/admin") });
   if (!s.accessoLibero) voci.push({ testo: "Esci", azione: () => void api.esci().then(() => window.location.replace("/")) });
   const limite =
@@ -157,6 +160,14 @@ export function Sidebar(p: Props) {
         <button type="button" className="btn-icona barra__icona" aria-label="Cerca nei report" onClick={apriRicerca}>
           <Icona nome="cerca" dimensione={20} />
         </button>
+        <a
+          href="#/documenti"
+          className={`btn-icona barra__icona${p.sezione === "documenti" ? " barra__icona--attiva" : ""}`}
+          aria-label="Documenti"
+          aria-current={p.sezione === "documenti" ? "page" : undefined}
+        >
+          <Icona nome="archivio" dimensione={20} />
+        </a>
         {menuCantieri(true)}
         <span className="barra__spazio" />
         <MenuUtente compatto />
@@ -184,7 +195,7 @@ export function Sidebar(p: Props) {
         </div>
         <button
           type="button"
-          className={`barra__voce barra__voce--forte${p.idAttivo === null ? " barra__voce--attiva" : ""}`}
+          className={`barra__voce barra__voce--forte${p.sezione === "home" ? " barra__voce--attiva" : ""}`}
           onClick={p.onNuovo}
         >
           <Icona nome="matita" />
@@ -212,6 +223,15 @@ export function Sidebar(p: Props) {
             />
           </label>
         )}
+        <a
+          href="#/documenti"
+          className={`barra__voce${p.sezione === "documenti" ? " barra__voce--attiva" : ""}`}
+          aria-current={p.sezione === "documenti" ? "page" : undefined}
+          onClick={p.onChiudiMobile}
+        >
+          <Icona nome="archivio" />
+          Documenti
+        </a>
         {menuCantieri(false)}
 
         <div className="barra__cronologia">

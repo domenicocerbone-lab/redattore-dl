@@ -11,6 +11,7 @@ import type {
   Parziale,
   RifDocumento,
 } from "../../shared/schema";
+import { statoVersione } from "../../shared/versioni";
 import { api } from "../lib/api";
 import { durata } from "../lib/dettatura";
 import type { FaseTurno, TurnoInCorso } from "../lib/stato";
@@ -218,6 +219,7 @@ export function Messaggi(p: Props) {
   const ctxBase = {
     inScrittura: false,
     documentoAperto: p.documentoAperto,
+    statoDocumento: (rif: RifDocumento) => statoVersione(p.conversazione, rif),
     onAzione: p.onAzione,
     onApriDocumento: p.onApriDocumento,
   };

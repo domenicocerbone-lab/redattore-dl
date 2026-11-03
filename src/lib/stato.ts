@@ -192,10 +192,39 @@ export async function impostaFeedback(id: string, messaggio: string, valore: "ut
   await api.feedback(id, messaggio, valore);
 }
 
+const senza = <T,>(r: Record<string, T> | undefined, chiave: string) => {
+  const { [chiave]: _tolto, ...resto } = r ?? {};
+  return resto;
+};
+
+/** Una versione modificata a mano torna bozza: il server toglie firme e stato definitivo. */
 export async function salvaModifica(id: string, chiave: string, testo: string, html: string) {
   const modifica = await api.salvaModifica(id, chiave, { testo, html });
   aggiornaConversazione(id, (c) => ({
     ...c,
     modificheManuali: { ...c.modificheManuali, [chiave]: modifica },
+    firme: senza(c.firme, chiave),
+    statiDocumento: senza(c.statiDocumento, chiave),
+  }));
+}
+
+export async function apponiFirma(id: string, chiave: string, slot: number) {
+  const firme = await api.apponiFirma(id, chiave, slot);
+  aggiornaConversazione(id, (c) => ({ ...c, firme: { ...c.firme, [chiave]: firme } }));
+}
+
+export async function togliFirma(id: string, chiave: string) {
+  const firme = await api.togliFirma(id, chiave);
+  aggiornaConversazione(id, (c) => ({
+    ...c,
+    firme: firme.length ? { ...c.firme, [chiave]: firme } : senza(c.firme, chiave),
+  }));
+}
+
+export async function impostaDefinitivo(id: string, chiave: string, definitivo: boolean) {
+  const stato = await api.impostaDefinitivo(id, chiave, definitivo);
+  aggiornaConversazione(id, (c) => ({
+    ...c,
+    statiDocumento: stato ? { ...c.statiDocumento, [chiave]: stato } : senza(c.statiDocumento, chiave),
   }));
 }

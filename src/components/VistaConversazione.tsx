@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cantiere } from "../../shared/cantieri";
 import { MODALITA_FOTO, nomeModalita, tipoDocumento } from "../../shared/documenti";
-import type { Documento, Parziale, RifDocumento } from "../../shared/schema";
+import type { Documento, FirmaApposta, Parziale, RifDocumento } from "../../shared/schema";
+import type { StatoDocumento } from "../../shared/versioni";
 import { dataCompleta } from "../lib/date";
 import { useNowVision } from "../lib/nowvision";
 import { documentiDi, type DocumentoConversazione } from "../lib/documenti";
@@ -26,12 +27,14 @@ type Pannello = RifDocumento | "in_scrittura" | null;
 
 interface Props {
   id: string;
+  /** Versione da aprire subito nel pannello, da un link della pagina Documenti. */
+  documentoIniziale?: RifDocumento | null;
   onApriMenu: () => void;
   onNuovo: () => void;
   onPannello: (aperto: boolean) => void;
 }
 
-export function VistaConversazione({ id, onApriMenu, onNuovo, onPannello }: Props) {
+export function VistaConversazione({ id, documentoIniziale, onApriMenu, onNuovo, onPannello }: Props) {
   const stato = useConversazione(id);
   const [pannello, setPannello] = useState<Pannello>(null);
   const [chiusoNelTurno, setChiusoNelTurno] = useState(false);
@@ -53,12 +56,12 @@ export function VistaConversazione({ id, onApriMenu, onNuovo, onPannello }: Prop
     | { documento?: Parziale<Documento> }
     | undefined;
 
-  // Cambiando conversazione si riparte dal pannello chiuso.
+  // Cambiando conversazione si riparte dal pannello chiuso, o dalla versione richiesta nel link.
   useEffect(() => {
-    setPannello(null);
+    setPannello(documentoIniziale ?? null);
     setChiusoNelTurno(false);
     inFondo.current = true;
-  }, [id]);
+  }, [id, documentoIniziale?.id, documentoIniziale?.versione]);
 
   // Il pannello si apre da solo quando il Redattore inizia a scrivere una bozza…
   useEffect(() => {
@@ -122,6 +125,8 @@ export function VistaConversazione({ id, onApriMenu, onNuovo, onPannello }: Prop
   let documentoAperto: { documento: Parziale<Documento>; rif: RifDocumento | null } | null = null;
   let versioni: RifDocumento[] = [];
   let modifica;
+  let firme: FirmaApposta[] = [];
+  let statoVersione: StatoDocumento = "bozza";
   if (pannello === "in_scrittura") {
     if (documentoInScrittura?.documento) documentoAperto = { documento: documentoInScrittura.documento, rif: null };
   } else if (pannello) {
@@ -131,6 +136,8 @@ export function VistaConversazione({ id, onApriMenu, onNuovo, onPannello }: Prop
       documentoAperto = { documento: versione.documento, rif: versione.rif };
       versioni = voce.versioni.map((v) => v.rif);
       modifica = versione.modifica;
+      firme = versione.firme;
+      statoVersione = versione.stato;
     }
   }
 
@@ -235,6 +242,8 @@ export function VistaConversazione({ id, onApriMenu, onNuovo, onPannello }: Prop
           rif={documentoAperto.rif}
           versioni={versioni}
           modifica={modifica}
+          firme={firme}
+          stato={statoVersione}
           onVersione={setPannello}
           onChiudi={() => {
             if (turno) setChiusoNelTurno(true);

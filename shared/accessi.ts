@@ -16,8 +16,22 @@ export interface Persona {
 
 export type DatiPersona = Pick<Persona, "nome" | "organizzazione" | "ruolo" | "cantieri" | "limiteGiornaliero">;
 
+/** Firma grafica della persona, apposta con un clic sulle versioni che ha controllato. */
+export interface FirmaProfilo {
+  /** Immagine PNG in data/firme/<hash>.png, servita da /api/firme/<hash>.png. */
+  hash: string;
+  /** Nome per esteso come compare sotto la firma, es. «Mario Rossi». */
+  nome: string;
+  /** «Ing.», «Arch.», «Geom.»… */
+  titolo: string;
+  /** Iscrizione all'albo, es. «Ordine degli Ingegneri di Milano n. 1234». */
+  albo: string;
+  aggiornataIl: string;
+}
+
 export interface Sessione {
   persona: Pick<Persona, "id" | "nome" | "ruolo" | "admin">;
+  firma: FirmaProfilo | null;
   iniziali: string;
   cantieri: string[];
   messaggiOggi: number;
@@ -28,7 +42,7 @@ export interface Sessione {
 
 /** Eventi che l'interfaccia può registrare da sola (il resto lo registra il server). */
 export type EventoInterfaccia =
-  | { tipo: "esportazione"; formato: "pdf" | "word" | "excel"; conversazione: string; documento: string }
+  | { tipo: "esportazione"; formato: "stampa" | "word" | "excel"; conversazione: string; documento: string }
   | { tipo: "copia"; cosa: "documento" | "risposta"; conversazione: string };
 
 export interface ConteggiUtilizzo {

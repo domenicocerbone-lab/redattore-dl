@@ -156,6 +156,33 @@ const TRACCIATI = {
       <path d="M9 7h8v8" />
     </>
   ),
+  firma: (
+    <>
+      <path d="M3 17c2.5 0 3.5-6 6-6s1 5 3 5 2-3 3.5-3 1.5 2 3.5 2" />
+      <path d="M3 21h18" />
+    </>
+  ),
+  archivio: (
+    <>
+      <path d="M3 5h18v4H3z" />
+      <path d="M5 9v10h14V9" />
+      <path d="M10 13h4" />
+    </>
+  ),
+  altro: (
+    <>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </>
+  ),
+  stampa: (
+    <>
+      <path d="M7 9V3h10v6" />
+      <path d="M7 17H4v-7h16v7h-3" />
+      <path d="M7 14h10v7H7z" />
+    </>
+  ),
 } as const;
 
 export type NomeIcona = keyof typeof TRACCIATI;

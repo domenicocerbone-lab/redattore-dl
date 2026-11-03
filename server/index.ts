@@ -8,7 +8,8 @@ import type { DatiPersona, EventoInterfaccia, Persona, Sessione } from "../share
 import type { EventoTurno, FotoCaricata, NuovaConversazione, NuovoMessaggio, Salute } from "../shared/api";
 import { cantiere } from "../shared/cantieri";
 import { MODALITA_FOTO, tipoDocumento } from "../shared/documenti";
-import type { ModificaManuale } from "../shared/schema";
+import { chiaveVersione, type FirmaApposta, type ModificaManuale } from "../shared/schema";
+import { trovaVersione, type VoceArchivio } from "../shared/versioni";
 import {
   ACCESSO_LIBERO,
   aggiornaPersona,
@@ -31,6 +32,7 @@ import {
 } from "./accessi";
 import {
   elenco,
+  indiceDocumenti,
   leggi,
   leggiFoto,
   meta,
@@ -43,7 +45,9 @@ import {
   urlFoto,
   type ConversazioneSalvata,
 } from "./archivio";
+import { caricaFirme, eliminaFirma, fileFirma, firmaComeDataUrl, firmaDi, salvaFirma, type DatiFirma } from "./firme";
 import { promptDiSistema } from "./istruzioni";
+import { PdfNonDisponibile, paginaDocumento, pdfConCache } from "./pdf";
 import { eliminaRipresa, fileRipresa, salvaFile, salvaRipresa, seminaEsempi, sintesi } from "./nowvision";
 import {
   MODELLO,
@@ -97,6 +101,7 @@ app.get("/api/sessione", (req, res) => {
   registraVisita(p.id);
   const sessione: Sessione = {
     persona: { id: p.id, nome: p.nome, ruolo: p.ruolo, admin: p.admin },
+    firma: firmaDi(p.id),
     iniziali: iniziali(p.nome),
     cantieri: cantieriDi(p),
     messaggiOggi: messaggiOggi(p.id),
@@ -302,6 +307,9 @@ app.put("/api/conversazioni/:id/modifiche/:chiave", asincrono(async (req, res) =
   const { testo, html } = req.body as Pick<ModificaManuale, "testo" | "html">;
   const chiave = req.params.chiave;
   conv.modificheManuali[chiave] = { testo, html, il: new Date().toISOString() };
+  // Una versione modificata non è più quella firmata o chiusa: torna bozza.
+  delete conv.firme?.[chiave];
+  delete conv.statiDocumento?.[chiave];
   // Il modello lo saprà al prossimo messaggio del DL.
   conv.notePendenti = conv.notePendenti.filter((n) => !n.includes(`(${chiave})`));
   conv.notePendenti.push(
@@ -316,7 +324,7 @@ app.put("/api/conversazioni/:id/modifiche/:chiave", asincrono(async (req, res) =
 app.post("/api/eventi", asincrono(async (req, res) => {
   const e = req.body as EventoInterfaccia;
   const persona = personaDella(res).id;
-  if (e?.tipo === "esportazione" && ["pdf", "word", "excel"].includes(e.formato)) {
+  if (e?.tipo === "esportazione" && ["stampa", "word", "excel"].includes(e.formato)) {
     void registra({ persona, tipo: "esportazione", conversazione: String(e.conversazione).slice(0, 60), modalita: e.formato, dettaglio: String(e.documento ?? "").slice(0, 120) });
   } else if (e?.tipo === "copia" && (e.cosa === "documento" || e.cosa === "risposta")) {
     void registra({ persona, tipo: "copia", conversazione: String(e.conversazione).slice(0, 60), dettaglio: e.cosa });
@@ -325,6 +333,159 @@ app.post("/api/eventi", asincrono(async (req, res) => {
   }
   res.status(204).end();
 }));
+
+// ---------------------------------------------------------------------------
+// Versioni dei documenti: PDF, firme, stato definitivo
+
+/** «id@versione» di un documento che esiste davvero nella conversazione. */
+function versioneDa(conv: ConversazioneSalvata, chiave: string) {
+  const [id, numero] = [chiave.slice(0, chiave.lastIndexOf("@")), Number(chiave.slice(chiave.lastIndexOf("@") + 1))];
+  return Number.isInteger(numero) ? trovaVersione(conv, id, numero) : undefined;
+}
+
+const etichetta = (v: { documento: { titolo: string }; rif: { versione: number } }) => `${v.documento.titolo} v${v.rif.versione}`;
+
+app.get("/api/conversazioni/:id/documenti/:doc/:versione/pdf", asincrono(async (req, res) => {
+  const conv = await leggiSua(req, res);
+  if (!conv) return;
+  const v = trovaVersione(conv, req.params.doc, Number(req.params.versione));
+  if (!v) return res.status(404).json({ errore: "Versione non trovata" });
+  const chiaveCache = [conv.id, chiaveVersione(v.rif), v.aggiornataIl].join("|");
+  try {
+    const pdf = await pdfConCache(chiaveCache, async () => {
+      const firme = await Promise.all(
+        v.firme.map(async (f) => ({ ...f, src: (await firmaComeDataUrl(f.hash)) ?? "" })),
+      );
+      return paginaDocumento(v.documento, { html: v.modifica?.html, firme });
+    });
+    const nome = `${v.documento.titolo.replace(/[\u2012-\u2015]/g, "-").replace(/[\\/:*?"<>|«»]+/g, "-").trim() || "documento"} v${v.rif.versione}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `${req.query.scarica === "1" ? "attachment" : "inline"}; filename="documento.pdf"; filename*=UTF-8''${encodeURIComponent(nome)}`,
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(pdf);
+    void registra({ persona: personaDella(res).id, tipo: "esportazione", conversazione: conv.id, cantiere: conv.cantiereId, modalita: "pdf", dettaglio: etichetta(v) });
+  } catch (e) {
+    if (e instanceof PdfNonDisponibile) return res.status(503).json({ errore: "PDF non disponibile sul server: usa «Stampa»." });
+    throw e;
+  }
+}));
+
+app.post("/api/conversazioni/:id/firme/:chiave", asincrono(async (req, res) => {
+  const conv = await leggiSua(req, res);
+  if (!conv) return;
+  const p = personaDella(res);
+  if (proprietario(conv) !== p.id) return res.status(403).json({ errore: "Puoi firmare solo i documenti delle tue conversazioni." });
+  const firma = firmaDi(p.id);
+  if (!firma) return res.status(400).json({ errore: "Prima imposta la tua firma nel Profilo." });
+  const v = versioneDa(conv, req.params.chiave);
+  if (!v) return res.status(404).json({ errore: "Versione non trovata" });
+  const slot = Number(req.body?.slot);
+  if (!Number.isInteger(slot) || slot < 0 || slot >= v.documento.firme.length) {
+    return res.status(400).json({ errore: "Riquadro di firma non valido." });
+  }
+  const chiave = chiaveVersione(v.rif);
+  const apposta: FirmaApposta = { slot, personaId: p.id, hash: firma.hash, nome: firma.nome, titolo: firma.titolo, albo: firma.albo, il: new Date().toISOString() };
+  conv.firme ??= {};
+  conv.firme[chiave] = [...(conv.firme[chiave] ?? []).filter((f) => f.personaId !== p.id && f.slot !== slot), apposta];
+  conv.notePendenti.push(
+    `[L'utente ha firmato la versione ${v.rif.versione} di «${v.documento.titolo}» come «${v.documento.firme[slot].ruolo}». Quella versione è chiusa: se servono modifiche scrivi una nuova versione, che andrà firmata di nuovo.]`,
+  );
+  await salva(conv);
+  void registra({ persona: p.id, tipo: "firma", conversazione: conv.id, cantiere: conv.cantiereId, modalita: "apposta", dettaglio: etichetta(v) });
+  res.json(conv.firme[chiave]);
+}));
+
+app.delete("/api/conversazioni/:id/firme/:chiave", asincrono(async (req, res) => {
+  const conv = await leggiSua(req, res);
+  if (!conv) return;
+  const p = personaDella(res);
+  const v = versioneDa(conv, req.params.chiave);
+  if (!v) return res.status(404).json({ errore: "Versione non trovata" });
+  const chiave = chiaveVersione(v.rif);
+  const rimaste = (conv.firme?.[chiave] ?? []).filter((f) => f.personaId !== p.id);
+  if (conv.firme) {
+    if (rimaste.length) conv.firme[chiave] = rimaste;
+    else delete conv.firme[chiave];
+  }
+  await salva(conv);
+  void registra({ persona: p.id, tipo: "firma", conversazione: conv.id, cantiere: conv.cantiereId, modalita: "tolta", dettaglio: etichetta(v) });
+  res.json(rimaste);
+}));
+
+app.put("/api/conversazioni/:id/stati/:chiave", asincrono(async (req, res) => {
+  const conv = await leggiSua(req, res);
+  if (!conv) return;
+  const p = personaDella(res);
+  const v = versioneDa(conv, req.params.chiave);
+  if (!v) return res.status(404).json({ errore: "Versione non trovata" });
+  const chiave = chiaveVersione(v.rif);
+  const definitivo = req.body?.definitivo === true;
+  conv.statiDocumento ??= {};
+  if (definitivo) conv.statiDocumento[chiave] = { definitivo: true, il: new Date().toISOString(), personaId: p.id };
+  else delete conv.statiDocumento[chiave];
+  await salva(conv);
+  void registra({ persona: p.id, tipo: "definitivo", conversazione: conv.id, cantiere: conv.cantiereId, modalita: definitivo ? "definitivo" : "bozza", dettaglio: etichetta(v) });
+  res.json(conv.statiDocumento[chiave] ?? null);
+}));
+
+// ---------------------------------------------------------------------------
+// Pagina Documenti: tutte le versioni più recenti, con il loro stato
+
+app.get("/api/documenti", asincrono(async (req, res) => {
+  const p = personaDella(res);
+  const tutte = p.admin && req.query.persona === "tutte";
+  const cantiereFiltro = typeof req.query.cantiere === "string" ? req.query.cantiere : "";
+  const tipo = typeof req.query.tipo === "string" ? req.query.tipo : "";
+  const stato = typeof req.query.stato === "string" ? req.query.stato : "";
+  const cerca = typeof req.query.cerca === "string" ? req.query.cerca.trim().toLowerCase() : "";
+  const voci: VoceArchivio[] = [];
+  for (const conv of await indiceDocumenti()) {
+    if (!tutte && conv.proprietario !== p.id) continue;
+    for (const v of conv.voci) {
+      if (cantiereFiltro && v.cantiereId !== cantiereFiltro) continue;
+      if (tipo && v.tipo !== tipo) continue;
+      if (stato === "bozze" && v.stato !== "bozza") continue;
+      if (stato === "ultimati" && v.stato === "bozza") continue;
+      if (cerca && !v.titolo.toLowerCase().includes(cerca)) continue;
+      voci.push(tutte ? { ...v, persona: nomeDi(conv.proprietario) } : v);
+    }
+  }
+  voci.sort((a, b) => b.aggiornatoIl.localeCompare(a.aggiornatoIl));
+  res.json(voci);
+}));
+
+// ---------------------------------------------------------------------------
+// Profilo: la firma della persona
+
+app.get("/api/profilo/firma", (_req, res) => {
+  res.json(firmaDi(personaDella(res).id));
+});
+
+app.put("/api/profilo/firma", asincrono(async (req, res) => {
+  try {
+    res.json(await salvaFirma(personaDella(res).id, req.body as DatiFirma));
+  } catch (e) {
+    res.status(400).json({ errore: (e as Error).message });
+  }
+}));
+
+app.delete("/api/profilo/firma", asincrono(async (_req, res) => {
+  await eliminaFirma(personaDella(res).id);
+  res.status(204).end();
+}));
+
+// Immagini delle firme: il nome è l'impronta del contenuto, la conosce solo chi vede la firma.
+app.get("/api/firme/:file", (req, res) => {
+  const file = fileFirma(req.params.file.replace(/\.png$/, ""));
+  if (!file) return res.status(404).end();
+  res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+  res.sendFile(file, (e) => {
+    if (e && !res.headersSent) res.status(404).end();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Dati NowVision del cantiere: file xlsx e riprese 360°.
@@ -445,6 +606,7 @@ app.post("/api/admin/persone/:id/revoca", gestisci((req) => revoca(req.params.id
 async function avvia() {
   await preparaCartelle();
   await caricaAccessi();
+  await caricaFirme();
   await caricaEventi();
   await seminaEsempi();
   if (PRODUZIONE) {

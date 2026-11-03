@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { Salute } from "../shared/api";
+import type { RifDocumento } from "../shared/schema";
 import { Accesso } from "./components/Accesso";
 import { Home } from "./components/Home";
 import { Sidebar } from "./components/Sidebar";
@@ -8,14 +9,28 @@ import { api } from "./lib/api";
 import { caricaSessione, cantieriConsentiti, suSessioneScaduta } from "./lib/sessione";
 
 const Admin = lazy(() => import("./components/admin/Admin"));
+const PaginaDocumenti = lazy(() => import("./components/documenti/PaginaDocumenti"));
+const PaginaProfilo = lazy(() => import("./components/profilo/PaginaProfilo"));
 
 const CHIAVE_CANTIERE = "redattore-dl.cantiere";
 
-function rotta(): string | null {
-  return /^#\/c\/([\w-]+)/.exec(window.location.hash)?.[1] ?? null;
-}
+type Vista =
+  | { tipo: "home" }
+  | { tipo: "admin" }
+  | { tipo: "documenti" }
+  | { tipo: "profilo" }
+  | { tipo: "conversazione"; id: string; documento: RifDocumento | null };
 
-const inAdmin = () => window.location.hash.startsWith("#/admin");
+/** #/c/<conversazione>[/d/<documento>/<versione>], #/documenti, #/profilo, #/admin. */
+function leggiRotta(): Vista {
+  const h = window.location.hash;
+  if (h.startsWith("#/admin")) return { tipo: "admin" };
+  if (h.startsWith("#/documenti")) return { tipo: "documenti" };
+  if (h.startsWith("#/profilo")) return { tipo: "profilo" };
+  const m = /^#\/c\/([\w-]+)(?:\/d\/([\w-]+)\/(\d+))?/.exec(h);
+  if (m) return { tipo: "conversazione", id: m[1], documento: m[2] ? { id: m[2], versione: Number(m[3]) } : null };
+  return { tipo: "home" };
+}
 
 function cantiereSalvato(): string {
   const consentiti = cantieriConsentiti();
@@ -54,8 +69,7 @@ export function App() {
 }
 
 function Redattore() {
-  const [idAttivo, setIdAttivo] = useState(rotta);
-  const [admin, setAdmin] = useState(inAdmin);
+  const [vista, setVista] = useState(leggiRotta);
   const [cantiereId, setCantiereId] = useState(cantiereSalvato);
   const [barra, setBarra] = useState<"auto" | "completa" | "compatta">("auto");
   const [pannelloAperto, setPannelloAperto] = useState(false);
@@ -64,8 +78,7 @@ function Redattore() {
 
   useEffect(() => {
     const aggiorna = () => {
-      setIdAttivo(rotta());
-      setAdmin(inAdmin());
+      setVista(leggiRotta());
       setMenuMobile(false);
     };
     window.addEventListener("hashchange", aggiorna);
@@ -83,12 +96,12 @@ function Redattore() {
 
   const vai = (id: string | null) => {
     window.location.hash = id ? `#/c/${id}` : "#/";
-    setIdAttivo(id);
-    setAdmin(false);
+    setVista(id ? { tipo: "conversazione", id, documento: null } : { tipo: "home" });
     setMenuMobile(false);
   };
+  const idAttivo = vista.tipo === "conversazione" ? vista.id : null;
 
-  if (admin) {
+  if (vista.tipo === "admin") {
     return (
       <Suspense fallback={null}>
         <Admin onEsci={() => vai(null)} onApri={vai} />
@@ -111,6 +124,7 @@ function Redattore() {
         compatta={compatta}
         apertaSuMobile={menuMobile}
         idAttivo={idAttivo}
+        sezione={vista.tipo}
         cantiereId={cantiereId}
         onCompatta={(c) => setBarra(c ? "compatta" : "completa")}
         onChiudiMobile={() => setMenuMobile(false)}
@@ -128,9 +142,18 @@ function Redattore() {
             locale, tra le variabili del servizio online) e riavvia il server.
           </div>
         )}
-        {idAttivo ? (
+        {vista.tipo === "documenti" || vista.tipo === "profilo" ? (
+          <Suspense fallback={null}>
+            {vista.tipo === "documenti" ? (
+              <PaginaDocumenti onApriMenu={() => setMenuMobile(true)} />
+            ) : (
+              <PaginaProfilo onApriMenu={() => setMenuMobile(true)} />
+            )}
+          </Suspense>
+        ) : vista.tipo === "conversazione" ? (
           <VistaConversazione
-            id={idAttivo}
+            id={vista.id}
+            documentoIniziale={vista.documento}
             onApriMenu={() => setMenuMobile(true)}
             onNuovo={() => vai(null)}
             onPannello={onPannello}

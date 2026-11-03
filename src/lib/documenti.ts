@@ -1,46 +1,16 @@
-// Documenti di una conversazione (ricavati dalle risposte) ed esportazioni.
+// Esportazioni dal browser: Word, Excel e testo del foglio. Documenti e versioni sono in shared/versioni.ts.
 
-import type {
-  Conversazione,
-  Documento,
-  ModificaManuale,
-  RifDocumento,
-} from "../../shared/schema";
-import { chiaveVersione } from "../../shared/schema";
+export { documentiDi, type DocumentoConversazione, type VersioneDocumento } from "../../shared/versioni";
 
-export interface VersioneDocumento {
-  rif: RifDocumento;
-  documento: Documento;
-  modifica?: ModificaManuale;
-}
-
-export interface DocumentoConversazione {
-  id: string;
-  titolo: string;
-  versioni: VersioneDocumento[];
-}
-
-export function documentiDi(c: Conversazione): Map<string, DocumentoConversazione> {
-  const documenti = new Map<string, DocumentoConversazione>();
-  for (const m of c.messaggi) {
-    if (m.ruolo !== "assistente") continue;
-    for (const p of m.parti) {
-      if (p.tipo !== "documento" || !p.rif) continue;
-      const voce = documenti.get(p.rif.id) ?? { id: p.rif.id, titolo: p.documento.titolo, versioni: [] };
-      voce.titolo = p.documento.titolo;
-      voce.versioni.push({
-        rif: p.rif,
-        documento: p.documento,
-        modifica: c.modificheManuali[chiaveVersione(p.rif)],
-      });
-      documenti.set(p.rif.id, voce);
-    }
-  }
-  return documenti;
-}
-
-function nomeFile(titolo: string, estensione: string) {
-  const base = titolo.replace(/[\\/:]+/g, "-").replace(/[*?"<>|]+/g, "").replace(/\s+/g, " ").trim() || "documento";
+export function nomeFile(titolo: string, estensione: string) {
+  // Niente trattini lunghi: alcuni browser scartano il nome e salvano «download».
+  const base =
+    titolo
+      .replace(/[\u2012-\u2015]/g, "-")
+      .replace(/[\\/:]+/g, "-")
+      .replace(/[*?"<>|«»]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "documento";
   return `${base}.${estensione}`;
 }
 
@@ -65,8 +35,24 @@ export function esportaWord(titolo: string, foglio: HTMLElement) {
     td,th{border:1px solid #d9d9d9;padding:4pt 6pt;vertical-align:top;font-size:10pt}
     th{background:#f4f2f0;text-align:left}
     .doc-etichetta{font-size:8pt;text-transform:uppercase;color:#555}
-    .segnaposto{background:#fde047}`;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${titolo}</title><style>${stile}</style></head><body>${foglio.outerHTML}</body></html>`;
+    .segnaposto{background:#fde047}
+    .doc-firma__immagine{height:56px}`;
+  // Le firme apposte si incorporano: il file .doc non può scaricarle dal server.
+  const copia = foglio.cloneNode(true) as HTMLElement;
+  const originali = foglio.querySelectorAll("img");
+  copia.querySelectorAll("img").forEach((img, i) => {
+    const o = originali[i];
+    try {
+      const tela = document.createElement("canvas");
+      tela.width = o.naturalWidth;
+      tela.height = o.naturalHeight;
+      tela.getContext("2d")!.drawImage(o, 0, 0);
+      img.src = tela.toDataURL("image/png");
+    } catch {
+      img.remove();
+    }
+  });
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${titolo}</title><style>${stile}</style></head><body>${copia.outerHTML}</body></html>`;
   scarica(html, "application/msword", nomeFile(titolo, "doc"));
 }
 

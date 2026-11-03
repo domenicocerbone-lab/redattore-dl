@@ -4,14 +4,13 @@
 // Codici e sessioni sono salvati solo come hash.
 
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { NextFunction, Request, Response } from "express";
 import type { DatiPersona, Persona } from "../shared/accessi";
 import { CANTIERI, UTENTE } from "../shared/cantieri";
 import { PRODUZIONE } from "./ambiente";
+import { CARTELLA_DATI, leggiJson, scriviAtomico } from "./archivio-json";
 
-const CARTELLA_DATI = path.resolve(process.env.REDATTORE_DATI ?? "data");
 const FILE_PERSONE = path.join(CARTELLA_DATI, "persone.json");
 const FILE_SESSIONI = path.join(CARTELLA_DATI, "sessioni.json");
 const PASSWORD_ADMIN = process.env.REDATTORE_PASSWORD_ADMIN ?? "";
@@ -36,19 +35,7 @@ let sessioni: Record<string, SessioneSalvata> = {};
 const hash = (testo: string) => createHash("sha256").update(testo).digest("hex");
 const nuovoCodice = () => randomBytes(24).toString("base64url");
 
-async function scrivi(file: string, dati: unknown) {
-  await fs.writeFile(`${file}.tmp`, JSON.stringify(dati, null, 2));
-  await fs.rename(`${file}.tmp`, file);
-}
-
-async function leggiJson<T>(file: string, vuoto: T): Promise<T> {
-  try {
-    return JSON.parse(await fs.readFile(file, "utf8")) as T;
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return vuoto;
-    throw e;
-  }
-}
+const scrivi = (file: string, dati: unknown) => scriviAtomico(file, JSON.stringify(dati, null, 2));
 
 export async function caricaAccessi() {
   if (PRODUZIONE && !PASSWORD_ADMIN) {

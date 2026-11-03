@@ -4,6 +4,7 @@
 import type { Parte, ParteDi, Parziale, RifDocumento, TipoParte } from "../../../shared/schema";
 import { tipoDocumento } from "../../../shared/documenti";
 import { calcolaMisure, formatNumero } from "../../../shared/numeri";
+import type { StatoDocumento } from "../../../shared/versioni";
 import { Icona } from "../Icone";
 import { TestoRicco } from "../TestoRicco";
 import "./parti.css";
@@ -18,6 +19,8 @@ export interface ContestoParti {
   attiva: boolean;
   inScrittura: boolean;
   documentoAperto: RifDocumento | "in_scrittura" | null;
+  /** Bozza, definitivo o firmato: la scheda in chat lo mostra. */
+  statoDocumento?: (rif: RifDocumento) => StatoDocumento;
   onAzione: (a: Azione) => void;
   onApriDocumento: (rif: RifDocumento | "in_scrittura") => void;
 }
@@ -260,7 +263,10 @@ function SchedaDocumento({ parte, ctx, rif }: P<"documento"> & { rif?: RifDocume
     (ctx.documentoAperto === "in_scrittura"
       ? !rif
       : rif && ctx.documentoAperto.id === rif.id && ctx.documentoAperto.versione === rif.versione);
-  const stato = rif ? `Documento · Bozza v${rif.versione}${aperto ? " · aperto" : ""}` : "Documento · in scrittura…";
+  const NOMI_STATO: Record<StatoDocumento, string> = { bozza: "Bozza", definitivo: "Definitivo", firmato: "Firmato" };
+  const stato = rif
+    ? `Documento · ${NOMI_STATO[ctx.statoDocumento?.(rif) ?? "bozza"]} v${rif.versione}${aperto ? " · aperto" : ""}`
+    : "Documento · in scrittura…";
   return (
     <button type="button" className="scheda-documento" onClick={() => ctx.onApriDocumento(apre)}>
       <span className={`scheda-documento__icona${tipo?.attenzione ? " scheda-documento__icona--attenzione" : ""}`}>

@@ -23,7 +23,9 @@ export type TipoEvento =
   | "modifica"
   | "esportazione"
   | "copia"
-  | "nowvision";
+  | "nowvision"
+  | "firma"
+  | "definitivo";
 
 export interface Evento {
   il: string;
@@ -168,7 +170,7 @@ function conta(lista: Evento[]): ConteggiUtilizzo {
   return c;
 }
 
-const FORMATI: Record<string, string> = { pdf: "PDF", word: "Word", excel: "Excel" };
+const FORMATI: Record<string, string> = { pdf: "PDF", stampa: "stampa", word: "Word", excel: "Excel" };
 
 function descrivi(e: Evento): string {
   const plurale = (n: number, uno: string, molti: string) => `${n} ${n === 1 ? uno : molti}`;
@@ -203,6 +205,12 @@ function descrivi(e: Evento): string {
       return e.dettaglio === "documento" ? "ha copiato una bozza" : "ha copiato una risposta";
     case "nowvision":
       return e.dettaglio ?? "ha aggiornato i dati NowVision";
+    case "firma":
+      return e.modalita === "tolta" ? `ha tolto la firma da «${e.dettaglio ?? "documento"}»` : `ha firmato «${e.dettaglio ?? "documento"}»`;
+    case "definitivo":
+      return e.modalita === "bozza"
+        ? `ha riportato in bozza «${e.dettaglio ?? "documento"}»`
+        : `ha segnato come definitivo «${e.dettaglio ?? "documento"}»`;
   }
 }
 

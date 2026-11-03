@@ -1,9 +1,9 @@
 // Il documento come foglio: intestazione, dati generali, sezioni e firme.
 // Accetta anche un documento parziale, mentre il Redattore lo sta scrivendo.
+// Niente import di CSS qui: il server usa questo componente per il PDF (stili in documento.css).
 
 import type { Blocco, Documento, Parziale } from "../../../shared/schema";
 import { Inline } from "../TestoRicco";
-import "./documento.css";
 
 type Doc = Parziale<Documento>;
 
@@ -158,66 +158,109 @@ function BloccoView({ b }: { b: Parziale<Blocco> }) {
   }
 }
 
-export function DocumentoView({ documento, html }: { documento: Doc; html?: string }) {
-  if (html !== undefined) {
-    // Versione modificata a mano dal DL.
-    return <article className="doc" dangerouslySetInnerHTML={{ __html: html }} />;
-  }
+/** Una firma apposta, pronta da mostrare: `src` è l'URL dell'immagine (o un data URL nel PDF). */
+export interface FirmaVisibile {
+  slot: number;
+  src: string;
+  nome: string;
+  titolo: string;
+  albo: string;
+  il: string;
+}
+
+const dataFirma = (iso: string) =>
+  new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Europe/Rome" });
+
+function Firme({ firme, apposte }: { firme: Parziale<Documento["firme"]>; apposte: FirmaVisibile[] }) {
+  if (firme.length === 0) return null;
+  return (
+    <div
+      className="doc-firme"
+      style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(firme.length, 2), 3)}, minmax(0, 1fr))` }}
+    >
+      {firme.map((f, i) => {
+        const a = apposte.find((x) => x.slot === i);
+        return (
+          <div key={i} className={`doc-firma${a ? " doc-firma--apposta" : ""}`}>
+            <span className="doc-etichetta">{f.ruolo}</span>
+            {a ? (
+              <span className="doc-firma__blocco">
+                <img className="doc-firma__immagine" src={a.src} alt={`Firma di ${a.nome}`} />
+                <span className="doc-firma__nome">{[a.titolo, a.nome].filter(Boolean).join(" ")}</span>
+                {a.albo && <span className="doc-firma__albo">{a.albo}</span>}
+                <span className="doc-firma__data">Firmato il {dataFirma(a.il)}</span>
+              </span>
+            ) : (
+              <span className="doc-firma__nome">{f.nome}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Il riquadro firme sta fuori da `.doc-contenuto`, l'unica parte che si modifica a mano:
+ * così le modifiche non toccano le firme apposte.
+ */
+export function DocumentoView({
+  documento,
+  html,
+  firmeApposte = [],
+}: {
+  documento: Doc;
+  /** Versione modificata a mano: html di `.doc-contenuto`. */
+  html?: string;
+  firmeApposte?: FirmaVisibile[];
+}) {
   const d = documento;
-  const firme = d.firme ?? [];
   const larghezza = d.tipo_documento === "sal" ? 780 : d.tipo_documento === "giornale_lavori" ? 680 : 720;
   return (
     <article className="doc" style={{ maxWidth: larghezza }}>
-      {(d.intestazione?.sinistra || d.intestazione?.destra) && (
-        <div className="doc-intestazione">
-          <span>{d.intestazione?.sinistra}</span>
-          <span>{d.intestazione?.destra}</span>
-        </div>
-      )}
-      <div className="doc-titolo">
-        <div className="doc-titolo__testo">
-          <h2>{d.titolo}</h2>
-          {d.sottotitolo && <span className="doc-sottotitolo">{d.sottotitolo}</span>}
-        </div>
-        {(d.stati ?? []).length > 0 && (
-          <div className="doc-stati">
-            {d.stati!.map((s, i) => (
-              <span key={i} className={`pillola ${s.stile === "bordo" ? "pillola--bordo" : "pillola--attenzione"}`}>
-                {s.testo}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {(d.dati_generali?.campi ?? []).length > 0 && (
-        <GrigliaCampi campi={d.dati_generali!.campi!} colonne={d.dati_generali!.colonne ?? 2} />
-      )}
-
-      {(d.sezioni ?? []).map((s, i) => (
-        <section key={i} className="doc-sezione">
-          {s.titolo && <h3>{s.titolo}</h3>}
-          {(s.blocchi ?? []).map((b, j) => (
-            <BloccoView key={j} b={b} />
-          ))}
-        </section>
-      ))}
-
-      {d.formula_chiusura && <p className="doc-chiusura">{d.formula_chiusura}</p>}
-
-      {firme.length > 0 && (
-        <div
-          className="doc-firme"
-          style={{ gridTemplateColumns: `repeat(${Math.min(Math.max(firme.length, 2), 3)}, minmax(0, 1fr))` }}
-        >
-          {firme.map((f, i) => (
-            <div key={i} className="doc-firma">
-              <span className="doc-etichetta">{f.ruolo}</span>
-              <span className="doc-firma__nome">{f.nome}</span>
+      {html !== undefined ? (
+        <div className="doc-contenuto doc-contenuto--modificato" dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <div className="doc-contenuto">
+          {(d.intestazione?.sinistra || d.intestazione?.destra) && (
+            <div className="doc-intestazione">
+              <span>{d.intestazione?.sinistra}</span>
+              <span>{d.intestazione?.destra}</span>
             </div>
+          )}
+          <div className="doc-titolo">
+            <div className="doc-titolo__testo">
+              <h2>{d.titolo}</h2>
+              {d.sottotitolo && <span className="doc-sottotitolo">{d.sottotitolo}</span>}
+            </div>
+            {(d.stati ?? []).length > 0 && (
+              <div className="doc-stati">
+                {d.stati!.map((s, i) => (
+                  <span key={i} className={`pillola ${s.stile === "bordo" ? "pillola--bordo" : "pillola--attenzione"}`}>
+                    {s.testo}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {(d.dati_generali?.campi ?? []).length > 0 && (
+            <GrigliaCampi campi={d.dati_generali!.campi!} colonne={d.dati_generali!.colonne ?? 2} />
+          )}
+
+          {(d.sezioni ?? []).map((s, i) => (
+            <section key={i} className="doc-sezione">
+              {s.titolo && <h3>{s.titolo}</h3>}
+              {(s.blocchi ?? []).map((b, j) => (
+                <BloccoView key={j} b={b} />
+              ))}
+            </section>
           ))}
+
+          {d.formula_chiusura && <p className="doc-chiusura">{d.formula_chiusura}</p>}
         </div>
       )}
+      <Firme firme={d.firme ?? []} apposte={firmeApposte} />
     </article>
   );
 }

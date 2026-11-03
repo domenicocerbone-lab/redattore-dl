@@ -16,10 +16,24 @@
   overflow-wrap: break-word;
 }
 
-.doc[contenteditable="true"] {
+/* La parte che si modifica a mano: tutto tranne il riquadro firme. */
+.doc-contenuto {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.doc-contenuto[contenteditable="true"] {
   outline: 2px solid var(--nv-accent);
-  outline-offset: 4px;
+  outline-offset: 6px;
+  border-radius: var(--nv-r-sm);
   cursor: text;
+}
+
+/* Modifiche salvate prima della firma separata: il vecchio riquadro firme resta nascosto. */
+.doc-contenuto .doc-firme {
+  display: none;
 }
 
 .doc-etichetta {
@@ -235,8 +249,40 @@
   border-bottom: 1px solid var(--nv-ink);
   padding-bottom: 4px;
 }
+/* Con una firma apposta nella riga, le linee dei nomi restano allineate. */
+.doc-firme:has(.doc-firma--apposta) .doc-firma {
+  justify-content: flex-start;
+}
+.doc-firme:has(.doc-firma--apposta) .doc-firma:not(.doc-firma--apposta) .doc-firma__nome {
+  margin-top: 50px;
+}
+.doc-firma__blocco {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.doc-firma__immagine {
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left bottom;
+  margin-bottom: -6px;
+}
+.doc-firma__albo,
+.doc-firma__data {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--nv-ink-soft);
+}
+.doc-firma__data {
+  font-family: var(--nv-font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
 
-@media (max-width: 720px) {
+@media screen and (max-width: 720px) {
   .doc {
     padding: 24px 20px 28px;
   }

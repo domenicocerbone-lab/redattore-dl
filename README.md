@@ -34,9 +34,20 @@ La pagina **Utilizzo e accessi** mostra per 7, 30 o 90 giorni: persone attive, r
 
 Il registro è in `<REDATTORE_DATI>/eventi.jsonl`, persone e sessioni in `persone.json` e `sessioni.json` (codici e sessioni salvati solo come hash).
 
+## Documenti, PDF e firma
+
+- **Documenti** (barra laterale, `#/documenti`): tutte le bozze e i documenti ultimati della persona, per mese, con filtri Tutti / Bozze / Ultimati, cantiere, tipo e ricerca. «Apri» porta alla conversazione con il pannello già sulla versione; «PDF» la scarica. L'amministratore può vedere i documenti di tutte le persone. In home, «Bozze da chiudere» mostra le ultime tre del cantiere.
+- **Stato di una versione**: *bozza*; *definitivo* se l'utente preme «Segna come definitivo» (menu ⋯ del pannello, per chi firma su carta o con la firma digitale); *firmato* se l'utente ci appone la sua firma. Una modifica a mano o una nuova versione chiesta in chat torna bozza.
+- **Firma** (Profilo, dal menu col proprio nome): firma grafica disegnata con dito o mouse oppure caricata da una scansione (lo sfondo chiaro diventa trasparente), con titolo, nome per esteso e iscrizione all'albo. Si appone solo con «Firma» su una versione, nel riquadro del proprio ruolo; il Redattore non firma mai da solo. Non è una firma digitale. Le immagini stanno in `<REDATTORE_DATI>/firme/` (per impronta del contenuto: chi rifà la firma non cambia i documenti già firmati), i dati in `firme.json`.
+- **PDF**: generato dal server con Chromium (`puppeteer-core`) dallo stesso componente del foglio, con font e firme incorporati, numeri di pagina, JavaScript disattivato e rete bloccata. Chromium va indicato con `REDATTORE_CHROMIUM` (nell'immagine Docker è `/usr/bin/chromium`); senza, il PDF risponde 503 e resta «Stampa».
+
 ## Pubblicazione su Railway
 
-Il progetto ha già `Dockerfile` e `railway.json`. Dalla cartella del progetto, sul tuo computer (serve Node.js):
+Il modo più semplice è dal browser: su railway.com «New Project» → «Deploy from GitHub repo» → questo repository, poi **Variables** (`ANTHROPIC_API_KEY`, `REDATTORE_PASSWORD_ADMIN`), un **volume** montato su `/data` e **Generate Domain** in Settings → Networking. Ogni push su `main` si pubblica da solo.
+
+L'immagine include Chromium per i PDF: pesa circa 300 MB in più e ogni PDF usa per qualche secondo 150–250 MB di memoria. Con piani da 512 MB di RAM il PDF può non riuscire.
+
+In alternativa, dalla cartella del progetto sul tuo computer (serve Node.js):
 
 ```bash
 npx @railway/cli login
@@ -66,7 +77,7 @@ I file in `.railwayignore` non vengono caricati (la chiave in `.env`, `node_modu
 - **Cronologia**: le conversazioni sono salvate in `data/` (JSON e foto). La cronologia inviata all'API cresce solo in coda, così i blocchi di ragionamento restano validi e il prefisso resta in cache (`cache_control` automatico).
 - **Foto**: ridimensionate nel browser (lato lungo 2000 px), numerate F1, F2… nella conversazione.
 - **Dettatura**: Web Speech API del browser (Chrome, Edge, Safari).
-- **Esportazione**: PDF tramite stampa del foglio, Word come `.doc` HTML, tabelle del SAL in CSV per Excel.
+- **Esportazione**: PDF generato dal server (o stampa del foglio dal browser), Word come `.doc` HTML con le firme incorporate, tabelle del SAL in CSV per Excel.
 
 ## Riprese 360° e dati NowVision
 
@@ -83,10 +94,10 @@ Si caricano dalla finestra «Riprese 360°» (chip «Proponi dalle riprese NowVi
 ## Struttura
 
 ```
-server/       API, turno con Claude, prompt di sistema, strumenti di calcolo, archivio, dati NowVision, accessi e registro d'uso
-shared/       schema delle risposte, catalogo dei documenti, cantieri di esempio, calcoli
+server/       API, turno con Claude, prompt di sistema, strumenti di calcolo, archivio, dati NowVision, accessi, registro d'uso, PDF e firme
+shared/       schema delle risposte, catalogo dei documenti, versioni e stati dei documenti, cantieri di esempio, calcoli
 src/          interfaccia React (Vite)
-  components/ barra laterale, home, chat, schede, campo di scrittura, pannello documento
+  components/ barra laterale, home, chat, schede, campo di scrittura, pannello documento, Documenti, Profilo
   lib/        stato condiviso, chiamate al server, dettatura, foto, esportazioni
 scripts/      Claude finto per demo e prove dell'interfaccia
 ```
@@ -94,6 +105,5 @@ scripts/      Claude finto per demo e prove dell'interfaccia
 ## Da sapere
 
 - L'anagrafica dei cantieri e dell'utente (`shared/cantieri.ts`) è di esempio: in produzione va letta dalla piattaforma NowVision.
-- Non c'è autenticazione né multiutente: è pensato per girare in locale o dietro l'accesso della piattaforma.
 - In modalità demo il confronto con le riprese NowVision c'è solo per le 5 riprese di esempio di Residenze Incanto, con il report di avanzamento: sono risposte preparate in anticipo sulle riprese e sui file reali. Per qualsiasi altra ripresa serve Claude vero.
 - `npm run demo` usa un server finto (`scripts/claude-finto.ts`) che riconosce solo i casi del design: serve a vedere l'interfaccia, non a valutare il Redattore.

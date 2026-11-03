@@ -162,6 +162,63 @@
   border: 1px solid var(--nv-line);
 }
 
+/* Bozze da chiudere: le ultime tre del cantiere, sotto i tipi di documento. */
+.home__bozze {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.home__bozze-testa {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.home__bozze-tutte {
+  font-size: 13.5px;
+  color: var(--nv-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home__bozze ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-glass);
+}
+.home__bozze li + li {
+  border-top: 1px solid var(--nv-line-faint);
+}
+.home__bozze li a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--nv-ink);
+  text-decoration: none;
+  font-size: 14px;
+}
+.home__bozze li a:hover .home__bozze-nome {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.home__bozze-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home__bozze-quando {
+  flex: none;
+  font-size: 13px;
+  color: var(--nv-ink-soft);
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

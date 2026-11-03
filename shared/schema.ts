@@ -286,10 +286,33 @@ export interface ConversazioneMeta {
   aggiornataIl: string;
 }
 
+/** Firma grafica apposta da una persona su una versione, nel riquadro firme numero `slot`. */
+export interface FirmaApposta {
+  slot: number;
+  personaId: string;
+  /** Immagine in data/firme/<hash>.png: resta quella anche se la persona rifà la firma. */
+  hash: string;
+  nome: string;
+  titolo: string;
+  albo: string;
+  il: string;
+}
+
+/** Versione segnata come definitiva da chi la usa (per chi firma su carta o con firma digitale). */
+export interface StatoVersione {
+  definitivo: true;
+  il: string;
+  personaId: string;
+}
+
 export interface Conversazione extends ConversazioneMeta {
   messaggi: Messaggio[];
   /** Modifiche fatte a mano dal DL, per «id@versione». */
   modificheManuali: Record<string, ModificaManuale>;
+  /** Firme apposte, per «id@versione». */
+  firme?: Record<string, FirmaApposta[]>;
+  /** Versioni segnate come definitive, per «id@versione». */
+  statiDocumento?: Record<string, StatoVersione>;
 }
 
 export function chiaveVersione(rif: RifDocumento): string {

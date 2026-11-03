@@ -45,6 +45,11 @@
   gap: 4px;
   cursor: pointer;
 }
+/* Si accorcia il titolo, non le pillole di versione e stato. */
+.pannello-doc__titolo > .menu,
+.pannello-doc__titolo > .pillola {
+  flex: none;
+}
 .pannello-doc__scrittura {
   animation: pulsa 1.6s ease-in-out infinite;
 }
@@ -93,13 +98,8 @@
   }
 }
 
+/* Stampa dal browser: si vede solo il foglio (le regole del foglio sono in stampa.css). */
 @media print {
-  @page {
-    margin: 16mm;
-  }
-  body {
-    background: #fff;
-  }
   body * {
     visibility: hidden;
   }
@@ -110,20 +110,11 @@
   .pannello-doc .doc {
     position: absolute;
     inset: 0 auto auto 0;
-    width: 100%;
-    max-width: none !important;
-    border: 0;
-    padding: 0;
-    outline: none;
   }
   .pannello-doc,
   .pannello-doc__corpo {
     position: static;
     overflow: visible;
     height: auto;
-  }
-  .segnaposto {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 }

@@ -1,7 +1,9 @@
 // Home: «Cosa verbalizziamo oggi?», scelta del documento e primo messaggio.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MODALITA_FOTO, TIPI_DOCUMENTO, tipoDocumento } from "../../shared/documenti";
+import { linkDocumento, type VoceArchivio } from "../../shared/versioni";
+import { api } from "../lib/api";
 import { quando } from "../lib/date";
 import { useNowVision } from "../lib/nowvision";
 import { creaConversazione, inviaMessaggio, useElenco, type Invio } from "../lib/stato";
@@ -27,6 +29,19 @@ export function Home({ cantiereId, onCantiere, onApriMenu, onAperta }: Props) {
   const composer = useRef<ComposerHandle>(null);
   const elenco = useElenco();
   const nowvision = useNowVision(cantiereId);
+  const [bozze, setBozze] = useState<VoceArchivio[]>([]);
+
+  // Le ultime bozze del cantiere, per riprenderle da dove si erano lasciate.
+  useEffect(() => {
+    let attuale = true;
+    api.documenti({ stato: "bozze", cantiere: cantiereId }).then(
+      (v) => attuale && setBozze(v.slice(0, 3)),
+      () => undefined,
+    );
+    return () => {
+      attuale = false;
+    };
+  }, [cantiereId, elenco]);
 
   const ultimoGiornale = elenco?.find((c) => c.modalita === "giornale_lavori" && c.cantiereId === cantiereId);
   const segnaposto =
@@ -164,6 +179,33 @@ export function Home({ cantiereId, onCantiere, onApriMenu, onAperta }: Props) {
             {altriAperti ? "Meno ↑" : "Altro ↓"}
           </button>
         </div>
+
+        {bozze.length > 0 && (
+          <section className="home__bozze" aria-labelledby="titolo-bozze">
+            <div className="home__bozze-testa">
+              <span id="titolo-bozze" className="etichetta-mono">
+                Bozze da chiudere
+              </span>
+              <a href="#/documenti" className="home__bozze-tutte">
+                Tutti i documenti →
+              </a>
+            </div>
+            <ul>
+              {bozze.map((v) => {
+                const t = tipoDocumento(v.tipo);
+                return (
+                  <li key={`${v.conversazione}/${v.id}`}>
+                    <a href={linkDocumento(v)}>
+                      <Icona nome={t?.icona ?? "documento"} dimensione={16} colore={t?.attenzione ? "var(--nv-orange)" : "var(--nv-mint-dark)"} />
+                      <span className="home__bozze-nome">{v.titolo}</span>
+                      <span className="home__bozze-quando">{quando(v.aggiornatoIl)}</span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </div>
 
       <p className="avvertenza">Il Redattore DL prepara bozze · verifica e firma restano del Direttore dei Lavori</p>

@@ -7,9 +7,10 @@ import type {
   NuovoMessaggio,
   Salute,
 } from "../../shared/api";
-import type { DatiPersona, EventoInterfaccia, Persona, RiepilogoUtilizzo } from "../../shared/accessi";
+import type { DatiPersona, EventoInterfaccia, FirmaProfilo, Persona, RiepilogoUtilizzo } from "../../shared/accessi";
 import type { Ripresa, SintesiNowVision } from "../../shared/nowvision";
-import type { Conversazione, ConversazioneMeta, ModificaManuale } from "../../shared/schema";
+import type { Conversazione, ConversazioneMeta, FirmaApposta, ModificaManuale, StatoVersione } from "../../shared/schema";
+import type { VoceArchivio } from "../../shared/versioni";
 import { sessioneScaduta } from "./sessione";
 
 async function json<T>(risposta: Promise<Response>): Promise<T> {
@@ -55,6 +56,23 @@ export const api = {
     json<ModificaManuale>(
       invia("PUT", `/api/conversazioni/${id}/modifiche/${encodeURIComponent(chiave)}`, modifica),
     ),
+  apponiFirma: (id: string, chiave: string, slot: number) =>
+    json<FirmaApposta[]>(invia("POST", `/api/conversazioni/${id}/firme/${encodeURIComponent(chiave)}`, { slot })),
+  togliFirma: (id: string, chiave: string) =>
+    json<FirmaApposta[]>(fetch(`/api/conversazioni/${id}/firme/${encodeURIComponent(chiave)}`, { method: "DELETE" })),
+  impostaDefinitivo: (id: string, chiave: string, definitivo: boolean) =>
+    json<StatoVersione | null>(invia("PUT", `/api/conversazioni/${id}/stati/${encodeURIComponent(chiave)}`, { definitivo })),
+  documenti: (filtri: { cantiere?: string; tipo?: string; stato?: string; cerca?: string; persona?: string }) => {
+    const q = new URLSearchParams(Object.entries(filtri).filter((x): x is [string, string] => Boolean(x[1])));
+    return json<VoceArchivio[]>(fetch(`/api/documenti?${q}`));
+  },
+  firma: () => json<FirmaProfilo | null>(fetch("/api/profilo/firma")),
+  salvaFirma: (dati: { immagine?: string; nome: string; titolo: string; albo: string }) =>
+    json<FirmaProfilo>(invia("PUT", "/api/profilo/firma", dati)),
+  eliminaFirma: async () => {
+    const r = await fetch("/api/profilo/firma", { method: "DELETE" });
+    if (!r.ok) throw new Error(`Errore ${r.status}`);
+  },
   /** Esportazioni e copie: servono solo al registro d'uso, un errore non va mostrato. */
   evento: (e: EventoInterfaccia) => {
     void invia("POST", "/api/eventi", e).catch(() => undefined);
@@ -113,4 +131,28 @@ export async function turno(
   } finally {
     segnale.removeEventListener("abort", chiudi);
   }
+}
+
+export const urlFirma = (hash: string) => `/api/firme/${hash}.png`;
+
+export function urlPdf(conversazione: string, documento: string, versione: number, scarica = false) {
+  return `/api/conversazioni/${conversazione}/documenti/${encodeURIComponent(documento)}/${versione}/pdf${scarica ? "?scarica=1" : ""}`;
+}
+
+/** Scarica il PDF generato dal server; se il server non può generarlo l'errore spiega di usare «Stampa». */
+export async function scaricaPdf(conversazione: string, documento: string, versione: number, nome: string) {
+  const r = await fetch(urlPdf(conversazione, documento, versione, true));
+  if (r.status === 401) sessioneScaduta();
+  if (!r.ok) {
+    const corpo = await r.json().catch(() => null);
+    throw new Error(corpo?.errore ?? `Errore ${r.status}`);
+  }
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nome;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

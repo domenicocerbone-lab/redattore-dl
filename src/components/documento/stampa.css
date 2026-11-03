@@ -1,0 +1,53 @@
+/* Il foglio stampato: dal browser («Stampa») e nel PDF generato dal server. */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 16mm;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  .doc {
+    width: 100%;
+    max-width: none !important;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    outline: none;
+    font-size: 10.5pt;
+  }
+  .doc-contenuto[contenteditable] {
+    outline: none;
+  }
+  /* Tabelle e griglie lunghe devono poter andare a capo pagina, non essere tagliate. */
+  .doc-tabella,
+  .doc-griglia {
+    overflow: visible !important;
+  }
+  .doc-tabella table {
+    min-width: 0 !important;
+  }
+  .doc-tabella tr,
+  .doc-riepilogo__riga,
+  .doc-griglia__cella {
+    break-inside: avoid;
+  }
+  .doc-tabella thead {
+    display: table-header-group;
+  }
+  .doc-sezione h3 {
+    break-after: avoid;
+  }
+  .doc-firme {
+    break-inside: avoid;
+  }
+  .segnaposto,
+  .doc-fuori-norma,
+  .pillola,
+  .doc-firma__immagine {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

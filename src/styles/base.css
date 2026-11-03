@@ -169,6 +169,21 @@ button:disabled {
   letter-spacing: 0.06em;
   padding: 2px 7px;
 }
+/* Stato di un documento: bozza neutra, definitivo in inchiostro, firmato in menta. */
+.pillola--stato-bozza {
+  background: transparent;
+  border: 1px solid var(--nv-line-firm);
+  color: var(--nv-ink-soft);
+  padding: 2px 7px;
+}
+.pillola--stato-definitivo {
+  background: var(--nv-ink);
+  color: var(--nv-white);
+}
+.pillola--stato-firmato {
+  background: var(--nv-mint-soft);
+  color: var(--nv-ink);
+}
 
 .btn {
   display: inline-flex;
@@ -220,6 +235,11 @@ button:disabled {
   padding: 0 14px;
   background: var(--nv-accent);
   border-color: var(--nv-accent);
+}
+.btn--piccolo.btn--firmata {
+  background: var(--nv-mint-soft);
+  border-color: var(--nv-mint-dark);
+  font-weight: 500;
 }
 .btn:disabled {
   opacity: 0.45;

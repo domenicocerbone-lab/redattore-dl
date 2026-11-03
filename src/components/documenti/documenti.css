@@ -1,0 +1,226 @@
+/* Pagina Documenti: elenco per mese con stato e azioni. */
+
+.documenti {
+  background: var(--nv-paper);
+  min-height: 100dvh;
+}
+.documenti__titolo {
+  margin: 0;
+  padding: 0 6px;
+}
+.documenti__persone {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.documenti__persone input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--nv-mint-ink);
+}
+.documenti__corpo {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 20px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.documenti__filtri {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.documenti__schede {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-white);
+}
+.documenti__scheda {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--nv-r-sm);
+  background: none;
+  font-size: 14px;
+  color: var(--nv-ink);
+}
+.documenti__scheda--scelta {
+  background: var(--nv-ink);
+  color: var(--nv-white);
+}
+.documenti__scheda:focus-visible,
+.documenti__cerca input:focus-visible,
+.documenti__scelta select:focus-visible {
+  outline: 2px solid var(--nv-mint-dark);
+  outline-offset: 1px;
+}
+.documenti__cerca {
+  flex: 1 1 200px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-white);
+  color: var(--nv-ink-soft);
+}
+.documenti__cerca input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  color: var(--nv-ink);
+}
+.documenti__cerca input:focus-visible {
+  outline: none;
+}
+.documenti__scelta select {
+  height: 36px;
+  padding: 0 28px 0 10px;
+  border: 1px solid var(--nv-line-firm);
+  border-radius: var(--nv-r-md);
+  background: var(--nv-white);
+  font-size: 14px;
+  color: var(--nv-ink);
+}
+
+.documenti__errore {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-orange-tint);
+  color: var(--nv-orange-ink);
+  font-size: 14px;
+}
+.documenti__vuoto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  padding: 24px;
+  border: 1px dashed var(--nv-line-firm);
+  border-radius: var(--nv-r-lg);
+  color: var(--nv-ink-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.documenti__vuoto p {
+  margin: 0;
+  max-width: 560px;
+}
+a.btn {
+  text-decoration: none;
+}
+
+.documenti__gruppo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.documenti__mese {
+  margin: 0;
+  font-weight: 400;
+}
+.documenti__elenco {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--nv-line);
+  border-radius: var(--nv-r-lg);
+  background: var(--nv-white);
+}
+.documenti__voce {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--nv-line-faint);
+}
+.documenti__voce:last-child {
+  border-bottom: 0;
+}
+.documenti__icona {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--nv-r-md);
+  background: var(--nv-mint-soft);
+  color: var(--nv-mint-ink);
+}
+.documenti__icona--attenzione {
+  background: var(--nv-orange-soft);
+  color: var(--nv-orange-ink);
+}
+.documenti__testo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--nv-ink);
+  text-decoration: none;
+}
+.documenti__testo:hover .documenti__nome {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.documenti__nome {
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.documenti__dettagli,
+.documenti__nota {
+  font-size: 13px;
+  color: var(--nv-ink-soft);
+}
+.documenti__nota {
+  font-style: italic;
+}
+.documenti__azioni {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .documenti__corpo {
+    padding: 16px 16px 40px;
+  }
+  .documenti__scelta {
+    flex: 1 1 140px;
+  }
+  .documenti__scelta select {
+    width: 100%;
+  }
+  .documenti__voce {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 10px;
+  }
+  .documenti__nome {
+    white-space: normal;
+  }
+  .documenti__voce .pillola {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .documenti__azioni {
+    grid-column: 1 / -1;
+  }
+  .documenti__azioni .btn {
+    flex: 1;
+  }
+}

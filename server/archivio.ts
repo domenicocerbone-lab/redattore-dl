@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { BetaMessageParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { Conversazione, ConversazioneMeta, Messaggio } from "../shared/schema";
+import { vociArchivio, type VoceArchivio } from "../shared/versioni";
 
 const CARTELLA_DATI = path.resolve(process.env.REDATTORE_DATI ?? "data");
 const CARTELLA_CONVERSAZIONI = path.join(CARTELLA_DATI, "conversazioni");
@@ -123,6 +124,37 @@ export async function elenco(personaId: string, cerca?: string): Promise<Convers
     )
     .map(meta)
     .sort((a, b) => b.aggiornataIl.localeCompare(a.aggiornataIl));
+}
+
+// ---------------------------------------------------------------------------
+// Indice dei documenti per la pagina Documenti: si rilegge una conversazione solo se il
+// suo file è cambiato, perché i file con le foto possono pesare parecchio.
+
+const indice = new Map<string, { mtime: number; proprietario: string; voci: VoceArchivio[] }>();
+
+export async function indiceDocumenti(): Promise<{ proprietario: string; voci: VoceArchivio[] }[]> {
+  const file = (await fs.readdir(CARTELLA_CONVERSAZIONI)).filter((f) => f.endsWith(".json"));
+  const presenti = new Set<string>();
+  const esito = await Promise.all(
+    file.map(async (f) => {
+      const id = f.slice(0, -5);
+      presenti.add(id);
+      try {
+        const { mtimeMs } = await fs.stat(path.join(CARTELLA_CONVERSAZIONI, f));
+        const pronta = indice.get(id);
+        if (pronta && pronta.mtime === mtimeMs) return pronta;
+        const c = await leggi(id);
+        if (!c) return null;
+        const voce = { mtime: mtimeMs, proprietario: proprietario(c), voci: vociArchivio(c) };
+        indice.set(id, voce);
+        return voce;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const id of indice.keys()) if (!presenti.has(id)) indice.delete(id);
+  return esito.filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
 // ---------------------------------------------------------------------------
